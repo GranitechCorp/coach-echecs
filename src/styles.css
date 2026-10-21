@@ -23,7 +23,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; background: var(--bg); color: var(--text); }
+html, body { margin: 0; background: var(--bg); color: var(--text); overflow-x: hidden; }
 body {
   font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   min-height: 100dvh;
@@ -135,14 +135,14 @@ label > input:not([type=checkbox]):not([type=radio]), label > select { margin-to
 
 /* ─── Échiquier ─── */
 .board-row { display: flex; gap: 6px; align-items: stretch; margin: 8px auto; width: 100%; max-width: min(100%, 72vh); }
-.board-box { flex: 1; position: relative; aspect-ratio: 1 / 1; }
+.board-box { flex: 1; position: relative; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 4px; }
 .board { position: relative; }
 .cg-host { position: absolute; inset: 0; }
 .cg-host.cg-wrap { width: 100%; height: 100%; }
 cg-board { border-radius: 4px; }
 coords { font-size: 9px; }
 .cg-wrap coords.ranks { left: 2px; right: auto; }
-.cg-wrap coords.files { bottom: 0; }
+.cg-wrap coords.files { bottom: 0; left: 0; right: 0; width: 100%; text-transform: lowercase; }
 .evalbar { width: 14px; flex: none; border-radius: 3px; background: #403d39; position: relative; overflow: hidden; }
 .evalbar-fill { position: absolute; bottom: 0; left: 0; right: 0; background: #f0f0f0; transition: height 0.4s; }
 .evalbar.flipped .evalbar-fill { background: #f0f0f0; }

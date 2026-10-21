@@ -210,7 +210,7 @@ export function render(root, id) {
         if (before.pv[0] && before.pv[0] !== played) paras.push(`Le moteur préférait ${fig(uciToSan(fens[cur], before.pv[0]))}.`);
         if (!paras.length) paras.push('Coup solide.');
       }
-      paras.push(`<small>Évaluation : ${evalText(before)} → ${evalText(after)}</small>`);
+      paras.push(`*Évaluation : ${evalText(before)} → ${evalText(after)}*`);
       showCoach(coachEl, {
         title: `${who} ${num}${fig(m.san)} ${classBadge(cls)}`,
         paragraphs: paras,

@@ -128,7 +128,8 @@ export function render(root) {
     const parsed = parsePgn(pgn);
     if (!parsed || !parsed.moves.length) return toast('PGN invalide.');
     const h = parsed.headers;
-    const id = importGame({ pgn, userColor: root.querySelector('#pgn-color').value, label: `${h.White || '?'} – ${h.Black || '?'}`, result: h.Result || '' });
+    const label = h.White || h.Black ? `${h.White || '?'} – ${h.Black || '?'}` : `Partie importée du ${new Date().toLocaleDateString('fr-FR')}`;
+    const id = importGame({ pgn, userColor: root.querySelector('#pgn-color').value, label, result: h.Result || '' });
     location.hash = `#/review/${id}`;
   };
   root.addEventListener('click', async (e) => {
