@@ -1,6 +1,6 @@
 import { db, update, exportData, importData, resetAll } from '../storage.js';
 import { setTitle, esc, toast, confirmDialog, md } from '../ui.js';
-import { MODELS, askCoach } from '../coach-ai.js';
+import { MODELS, askCoach, inClaudeViewer } from '../coach-ai.js';
 
 export const tab = 'settings';
 
@@ -10,6 +10,7 @@ export function render(root) {
   root.innerHTML = `
     <section class="card">
       <h2>✨ Coach IA (Claude)</h2>
+      ${inClaudeViewer() ? '<p class="small"><b>Tu utilises l’appli dans claude.ai : le coach IA passe par ton compte Claude, aucune clé n’est nécessaire.</b> La première fois, claude.ai te demande l’autorisation. Laisse le champ ci-dessous vide.</p>' : ''}
       <p class="small">Facultatif : sans clé, l’appli explique déjà les coups avec Stockfish et ses propres règles. Avec une clé API Claude, tu obtiens en plus des explications rédigées par un vrai coach, des bilans de partie et des réponses à tes questions.</p>
       <p class="small muted">Crée une clé sur <b>console.anthropic.com</b> → « API Keys ». La clé reste sur ton téléphone et n’est envoyée qu’à api.anthropic.com. Mets une limite de dépense mensuelle dans la console pour garder le contrôle.</p>
       <label>Clé API<input id="key" type="password" placeholder="sk-ant-…" value="${esc(s.settings.apiKey)}" autocomplete="off"/></label>
@@ -65,11 +66,23 @@ export function render(root) {
     });
     toast('Enregistré ✓');
   };
-  root.querySelector('#export').onclick = () => {
+  root.querySelector('#export').onclick = async () => {
+    const filename = `coach-echecs-${new Date().toISOString().slice(0, 10)}.json`;
+    if (inClaudeViewer()) {
+      const downloads = await window.claude.use('downloads');
+      if (!downloads) return toast('Export indisponible ici.');
+      try {
+        await downloads.save({ filename, data: exportData() });
+        toast('Sauvegarde enregistrée ✓');
+      } catch (e) {
+        if (e?.code !== 'declined') toast('Export impossible.');
+      }
+      return;
+    }
     const blob = new Blob([exportData()], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `coach-echecs-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
   };

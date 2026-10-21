@@ -10,7 +10,14 @@ const RESULT_FR = { win: 'Victoire', checkmated: 'Défaite (mat)', resigned: 'D�
 export const TIME_FR = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Correspondance' };
 
 async function getJson(url) {
-  const res = await fetch(url);
+  let res;
+  try {
+    res = await fetch(url);
+  } catch {
+    throw new Error(typeof window.claude?.use === 'function'
+      ? 'Dans la version claude.ai, la page ne peut pas contacter chess.com directement. Importe tes parties en PGN : « Mes parties / importer ».'
+      : 'Impossible de joindre chess.com : vérifie ta connexion.');
+  }
   if (res.status === 404) throw new Error('Joueur introuvable sur chess.com');
   if (res.status === 429) throw new Error('chess.com limite les requêtes : réessaie dans une minute');
   if (!res.ok) throw new Error(`chess.com ne répond pas (${res.status})`);
@@ -126,11 +133,99 @@ export async function syncChesscom(user = db().profile.chesscomUser, onProgress)
 /** Synchro silencieuse au démarrage (au plus toutes les 6 heures). */
 export async function autoSync() {
   const s = db();
-  if (!s.profile.chesscomUser || !navigator.onLine) return null;
+  if (!s.profile.chesscomUser || !navigator.onLine || typeof window.claude?.use === 'function') return null;
   if (s.sync?.at && Date.now() - s.sync.at < 6 * 3600 * 1000) return null;
   try {
     return await syncChesscom();
   } catch {
     return null;
   }
+}
+
+// ─────────────── Import par PGN (copier-coller ou fichier) ───────────────
+
+/** Sépare un texte contenant une ou plusieurs parties PGN. */
+export function splitPgn(text) {
+  const t = text.replace(/\r\n?/g, '\n').trim();
+  if (!t) return [];
+  const parts = t.split(/\n\s*\n(?=\[Event )/);
+  return parts.map((p) => p.trim()).filter((p) => /\d+\.\s*\S/.test(p));
+}
+
+function header(pgn, key) {
+  return pgn.match(new RegExp(`\\[${key} "([^"]*)"\\]`))?.[1] ?? '';
+}
+
+function timeClassOf(tc) {
+  if (!tc || tc === '-') return 'rapid';
+  if (tc.includes('/')) return 'daily';
+  const [base, inc = 0] = tc.split('+').map(Number);
+  const total = base + 40 * inc;
+  if (total < 180) return 'bullet';
+  if (total < 600) return 'blitz';
+  return 'rapid';
+}
+
+/**
+ * Ajoute des parties PGN à la base. La couleur du joueur est trouvée grâce à son pseudo ;
+ * à défaut on utilise `fallbackColor`. Renvoie { added, skipped }.
+ */
+export function importPgnBatch(text, { user = db().profile.chesscomUser, fallbackColor = 'w' } = {}) {
+  const games = splitPgn(text);
+  const s = db();
+  const known = new Set(s.games.map((g) => g.url || g.pgn));
+  const fresh = [];
+  let skipped = 0;
+  for (const pgn of games) {
+    const url = header(pgn, 'Link') || (header(pgn, 'Site').startsWith('http') ? header(pgn, 'Site') : '');
+    if (known.has(url || pgn)) {
+      skipped++;
+      continue;
+    }
+    const white = header(pgn, 'White');
+    const black = header(pgn, 'Black');
+    const u = (user || '').toLowerCase();
+    const userColor = u && white.toLowerCase() === u ? 'w' : u && black.toLowerCase() === u ? 'b' : fallbackColor;
+    const result = header(pgn, 'Result');
+    const score = result === '1/2-1/2' ? 0.5 : result === '1-0' ? (userColor === 'w' ? 1 : 0) : result === '0-1' ? (userColor === 'b' ? 1 : 0) : null;
+    const term = header(pgn, 'Termination').toLowerCase();
+    const onTime = /time|temps/.test(term);
+    const tc = header(pgn, 'TimeControl');
+    const { name, family } = openingFromPgn(pgn);
+    const date = (header(pgn, 'EndDate') || header(pgn, 'UTCDate') || header(pgn, 'Date')).replace(/\./g, '-');
+    const time = header(pgn, 'EndTime') || header(pgn, 'UTCTime') || '12:00:00';
+    const iso = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T${time.slice(0, 8)}Z`).toISOString() : new Date().toISOString();
+    const opp = userColor === 'w' ? black : white;
+    const oppRating = +header(pgn, userColor === 'w' ? 'BlackElo' : 'WhiteElo') || null;
+    const timeClass = timeClassOf(tc);
+    fresh.push({
+      id: uid(),
+      source: /chess\.com/i.test(header(pgn, 'Site') + url) ? 'chess.com' : 'import',
+      url: url || null,
+      date: iso,
+      pgn,
+      userColor,
+      result: score === 1 ? 'Victoire' : score === 0 ? (onTime ? 'Défaite (temps)' : 'Défaite') : score === 0.5 ? 'Nulle' : result,
+      resultCode: score === 0 && onTime ? 'timeout' : score === 1 ? 'win' : '',
+      oppResultCode: score === 1 && onTime ? 'timeout' : '',
+      score,
+      myRating: +header(pgn, userColor === 'w' ? 'WhiteElo' : 'BlackElo') || null,
+      oppRating,
+      opp,
+      timeClass,
+      timeControl: tc,
+      opening: name,
+      family,
+      label: `vs ${opp || '?'}${oppRating ? ` (${oppRating})` : ''} · ${TIME_FR[timeClass] || timeClass}`,
+    });
+    known.add(url || pgn);
+  }
+  if (fresh.length) {
+    update((d) => {
+      d.games.push(...fresh);
+      d.games.sort((a, b) => a.date.localeCompare(b.date));
+      if (d.games.length > MAX_GAMES) d.games.splice(0, d.games.length - MAX_GAMES);
+    });
+  }
+  return { added: fresh.length, skipped, total: games.length, ids: fresh.map((g) => g.id) };
 }

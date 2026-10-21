@@ -23,7 +23,13 @@ Règles :
 - Termine par une ligne « À retenir : … » avec un principe court et réutilisable.
 - Réponds en français, en markdown simple (gras, listes), sans titre.`;
 
-export const coachReady = () => !!db().settings.apiKey;
+/** Vrai quand l'appli tourne dans claude.ai : le coach passe alors par le compte Claude du joueur. */
+export const inClaudeViewer = () => typeof window !== 'undefined' && typeof window.claude?.use === 'function';
+
+let samplePromise = null;
+const getSample = () => (samplePromise ??= inClaudeViewer() ? window.claude.use('sample').catch(() => null) : Promise.resolve(null));
+
+export const coachReady = () => !!db().settings.apiKey || inClaudeViewer();
 
 function client() {
   return new Anthropic({ apiKey: db().settings.apiKey, dangerouslyAllowBrowser: true });
@@ -52,6 +58,7 @@ export function describePosition(fen) {
  * onText(texteCumulé) est appelé au fil de l'eau. Renvoie le texte final.
  */
 export async function askCoach(prompt, { effort = 'low', onText, maxTokens = 16000 } = {}) {
+  if (!db().settings.apiKey && inClaudeViewer()) return askViaClaudeAi(prompt, { effort, onText });
   const { model } = db().settings;
   const params = {
     model,
@@ -90,4 +97,29 @@ function friendlyError(e) {
   if (e instanceof Anthropic.APIConnectionError) return 'Pas de connexion à Internet (le coach IA a besoin du réseau).';
   if (e instanceof Anthropic.APIError) return `Erreur du service (${e.status}). Réessaie plus tard.`;
   return e?.message || String(e);
+}
+
+const SAMPLE_ERRORS = {
+  not_granted: 'Tu n’as pas autorisé l’appli à utiliser Claude. Recharge la page pour qu’elle te le redemande.',
+  sampling_disabled: 'Claude n’est pas disponible pour ce compte.',
+  rate_limited: 'Limite d’utilisation de Claude atteinte pour le moment : réessaie un peu plus tard.',
+  session_expired: 'Ta session claude.ai a expiré : reconnecte-toi.',
+  refused: 'Le coach n’a pas pu répondre à cette demande.',
+  prompt_too_large: 'Demande trop longue pour le coach.',
+};
+
+/** Dans claude.ai : le coach utilise le compte Claude du joueur (aucune clé API nécessaire). */
+async function askViaClaudeAi(prompt, { effort, onText }) {
+  const sample = await getSample();
+  if (!sample) throw new Error('Le coach IA n’est pas disponible ici : ajoute une clé API dans les Réglages.');
+  try {
+    const { text } = await sample(`${SYSTEM}\n\n---\n\n${prompt}`, {
+      modelTier: effort === 'medium' ? 'complex' : 'default',
+      effort,
+      onText: ({ text: t }) => onText?.(t),
+    });
+    return text;
+  } catch (e) {
+    throw new Error(SAMPLE_ERRORS[e?.code] || 'Le coach n’a pas pu répondre (erreur passagère). Réessaie dans un instant.');
+  }
 }

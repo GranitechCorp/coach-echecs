@@ -9,6 +9,8 @@ import { stepFen, uciToSan, fig } from '../chessutil.js';
 export const tab = 'puzzles';
 
 import { THEMES, THEME_LABELS } from '../data/themes.js';
+import { pickFromBank } from '../data/puzzle-bank.js';
+import { inClaudeViewer } from '../coach-ai.js';
 
 export { THEMES };
 const THEME_FR = THEME_LABELS;
@@ -130,6 +132,7 @@ export function render(root, mode = 'tactics', presetTheme = null) {
   // Tactique Lichess
   let theme = s.lastTheme || 'mix';
   let streak = 0;
+  let offline = false;
   head.innerHTML = `
     <div class="row between"><span>Classement exercices : <b id="rating">${Math.round(s.puzzles.rating)}</b></span><span class="muted small" id="streak"></span></div>
     <div class="chips scroll" id="themes">${THEMES.map(([id, label]) => `<button class="chip small ${id === theme ? 'on' : ''}" data-t="${id}">${esc(label)}</button>`).join('')}</div>`;
@@ -144,15 +147,22 @@ export function render(root, mode = 'tactics', presetTheme = null) {
 
   async function load() {
     stop();
+    if (inClaudeViewer()) offline = true; // dans claude.ai, la page ne peut pas joindre Lichess
     zone.innerHTML = '<p class="muted card">Chargement d’un exercice…</p>';
     let p;
     try {
+      if (offline) throw new Error('hors ligne');
       p = await fetchLichessPuzzle(theme, db().puzzles.rating);
     } catch {
-      toast('Pas de connexion à Lichess : exercices des cours à la place.');
-      const all = lessonPuzzles();
-      const q = all[Math.floor(Math.random() * all.length)];
-      p = { fen: q.fen, solution: q.solution, rating: null, themes: [], prompt: q.text, allowOthers: q.allowOthers };
+      if (!offline) toast('Lichess ne répond pas : exercices de la banque intégrée.');
+      offline = true;
+      p = pickFromBank(theme, db().puzzles.rating, db().puzzles.seen || []);
+      if (p) update((d) => (d.puzzles.seen = [...(d.puzzles.seen || []).slice(-400), p.id]));
+      else {
+        const all = lessonPuzzles();
+        const q = all[Math.floor(Math.random() * all.length)];
+        p = { fen: q.fen, solution: q.solution, rating: null, themes: [], prompt: q.text, allowOthers: q.allowOthers };
+      }
     }
     if (!root.isConnected) return;
     const themesFr = (p.themes || []).filter((t) => THEME_FR[t]).map((t) => THEME_FR[t]);

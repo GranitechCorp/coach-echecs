@@ -6,7 +6,9 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host",
-    "check": "node scripts/verify-content.mjs"
+    "check": "node scripts/verify-content.mjs",
+    "build:artifact": "vite build && node scripts/build-artifact.mjs",
+    "puzzles": "node scripts/build-puzzle-bank.mjs"
   },
   "license": "GPL-3.0-or-later",
   "dependencies": {

@@ -67,6 +67,6 @@ autoSync().then((r) => {
   if (r?.added) document.dispatchEvent(new CustomEvent('games-synced', { detail: r }));
 });
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+if ('serviceWorker' in navigator && import.meta.env.PROD && !window.claude) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }

@@ -10,7 +10,7 @@ import { buildProgram, isDone, itemHref } from '../program.js';
 import { skillBars, lineChart, attachLineTooltip } from '../charts.js';
 import { THEME_LABELS } from '../data/themes.js';
 import { OPENING_LINES } from '../data/openings.js';
-import { askCoach, coachReady } from '../coach-ai.js';
+import { askCoach, coachReady, inClaudeViewer } from '../coach-ai.js';
 import { promptProfileReport } from '../prompts.js';
 
 export const tab = 'profile';
@@ -54,10 +54,11 @@ export function render(root) {
         <div class="row between"><h2>♟ ${esc(s.profile.chesscomUser || 'chess.com')}</h2><a class="small muted" href="#/settings">changer</a></div>
         <div class="chips">${Object.entries(r).map(([k, v]) => `<span class="chip small"><b>${v.rating}</b><small>${esc(TIME_FR[k] || k)}</small></span>`).join('') || '<span class="muted small">Classements non chargés</span>'}</div>
         <p class="small muted">Dernière synchro : ${ago(s.sync?.at)} · ${s.games.length} parties enregistrées</p>
-        <div class="row wrap">
+        ${inClaudeViewer() ? `<p class="small">Dans claude.ai, la page ne peut pas contacter chess.com elle-même : importe tes parties en PGN (copier-coller ou fichier), c’est rapide.</p>
+        <div class="row wrap"><a class="btn primary small" href="#/analysis">⬆ Importer mes parties chess.com</a></div>` : `<div class="row wrap">
           <button class="btn primary small" id="sync">⟳ Synchroniser chess.com</button>
           <a class="btn ghost small" href="#/analysis">Mes parties / importer</a>
-        </div>
+        </div>`}
         <div id="sync-out" class="small"></div>
       </section>
 
@@ -176,7 +177,8 @@ export function render(root) {
     attachLineTooltip(root.querySelector('#blunder-chart'), bp);
 
     // ── événements ──
-    root.querySelector('#sync').onclick = async (e) => {
+    const syncBtn = root.querySelector('#sync');
+    if (syncBtn) syncBtn.onclick = async (e) => {
       const out = root.querySelector('#sync-out');
       e.target.disabled = true;
       try {

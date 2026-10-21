@@ -2,6 +2,7 @@
 import { db, update } from '../storage.js';
 import { setTitle, esc, toast, confirmDialog } from '../ui.js';
 import { parsePgn } from '../chessutil.js';
+import { importPgnBatch, splitPgn } from '../chesscom.js';
 import { importGame } from './review.js';
 
 export const tab = 'profile';
@@ -79,9 +80,17 @@ export function render(root) {
       <div id="list"></div>
     </section>
     <section class="card">
-      <h2>Coller une partie (PGN)</h2>
-      <textarea id="pgn" rows="4" placeholder="[Event &quot;...&quot;]&#10;1. d4 d5 2. c4 ..."></textarea>
-      <div class="row"><label>Je jouais : <select id="pgn-color"><option value="w">les Blancs</option><option value="b">les Noirs</option></select></label><button class="btn" id="go-pgn">Analyser</button></div>
+      <h2>Importer des parties (PGN)</h2>
+      <p class="small muted">Colle une ou plusieurs parties, ou choisis un fichier .pgn. Ta couleur est reconnue grâce à ton pseudo.</p>
+      <details class="small"><summary>Comment récupérer le PGN sur chess.com ?</summary>
+        <p><b>Une partie, dans l’appli chess.com :</b> ouvre la partie → icône Partager (ou ⋯) → <b>PGN</b> → Copier. Reviens ici et colle.</p>
+        <p><b>Plusieurs parties, sur chess.com dans le navigateur :</b> Jouer → <b>Archive</b> (ou chess.com/games/archive) → coche les parties → <b>Télécharger</b>. Tu obtiens un fichier .pgn à choisir ci-dessous.</p>
+      </details>
+      <textarea id="pgn" rows="4" placeholder="[Event &quot;Live Chess&quot;]&#10;[White &quot;Granitech&quot;]&#10;1. d4 d5 2. c4 ..."></textarea>
+      <div class="row wrap"><label class="btn small ghost">📄 Choisir un fichier .pgn<input type="file" id="pgn-file" accept=".pgn,text/plain,application/x-chess-pgn" hidden/></label>
+        <label class="small">Si ton pseudo n’apparaît pas, je jouais : <select id="pgn-color"><option value="w">les Blancs</option><option value="b">les Noirs</option></select></label></div>
+      <button class="btn primary" id="go-pgn">Importer</button>
+      <div id="pgn-out" class="small"></div>
     </section>
     <section class="card">
       <h2>Échiquier d’analyse</h2>
@@ -123,14 +132,25 @@ export function render(root) {
     const id = existing?.id || importGame({ pgn: g.pgn, userColor: g.userColor, label: `vs ${g.opp} (${g.source}, ${g.kind})`, source: g.source, result: g.result });
     location.hash = `#/review/${id}`;
   });
+  const doImport = (text) => {
+    const out = root.querySelector('#pgn-out');
+    const r = importPgnBatch(text, { fallbackColor: root.querySelector('#pgn-color').value });
+    if (!r.total) return toast('Aucune partie PGN reconnue.');
+    if (r.added === 1 && r.total === 1) {
+      location.hash = `#/review/${r.ids[0]}`;
+      return;
+    }
+    out.innerHTML = `✓ ${r.added} partie${r.added > 1 ? 's' : ''} importée${r.added > 1 ? 's' : ''}${r.skipped ? ` (${r.skipped} déjà présente${r.skipped > 1 ? 's' : ''})` : ''}. <a href="#/profile">Analyser et voir mon diagnostic →</a>`;
+  };
   root.querySelector('#go-pgn').onclick = () => {
-    const pgn = root.querySelector('#pgn').value.trim();
-    const parsed = parsePgn(pgn);
-    if (!parsed || !parsed.moves.length) return toast('PGN invalide.');
-    const h = parsed.headers;
-    const label = h.White || h.Black ? `${h.White || '?'} – ${h.Black || '?'}` : `Partie importée du ${new Date().toLocaleDateString('fr-FR')}`;
-    const id = importGame({ pgn, userColor: root.querySelector('#pgn-color').value, label, result: h.Result || '' });
-    location.hash = `#/review/${id}`;
+    const text = root.querySelector('#pgn').value.trim();
+    if (!text) return toast('Colle d’abord une partie.');
+    if (!parsePgn(splitPgn(text)[0] || text)) return toast('PGN invalide.');
+    doImport(text);
+  };
+  root.querySelector('#pgn-file').onchange = async (e) => {
+    const f = e.target.files[0];
+    if (f) doImport(await f.text());
   };
   root.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-del]');
