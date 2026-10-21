@@ -9,6 +9,7 @@ import { promptBestMove, promptQuestion } from '../prompts.js';
 import { askCoach, coachReady } from '../coach-ai.js';
 import { showCoach } from './coach-panel.js';
 import { startGame } from './game.js';
+import { aiEnabled } from '../local-coach.js';
 
 export const tab = 'profile';
 
@@ -25,10 +26,10 @@ export function render(root, fenParam) {
       <button class="btn" id="play">♟ Jouer d’ici</button>
     </div>
     <div class="coach" id="coach" hidden></div>
-    <section class="card">
+    ${aiEnabled() ? `<section class="card">
       <div class="row"><input id="q" placeholder="Pose une question au coach sur cette position…"/><button class="btn ai" id="ask">✨</button></div>
       <div id="answer"></div>
-    </section>
+    </section>` : ''}
     <div class="moves card" id="moves"></div>
     <section class="card"><div class="row"><input id="fen" placeholder="Coller une position FEN"/><button class="btn small" id="load">Charger</button></div></section>`;
   const chess = new Chess(startFen);
@@ -89,7 +90,8 @@ export function render(root, fenParam) {
       getPrompt: () => promptBestMove({ fen, lines: ls, userColor: chess.turn(), history: chess.history() }),
     });
   };
-  root.querySelector('#ask').onclick = async () => {
+  const askBtn = root.querySelector('#ask');
+  if (askBtn) askBtn.onclick = async () => {
     const q = root.querySelector('#q').value.trim();
     if (!q) return;
     if (!coachReady()) return toast('Ajoute ta clé API Claude dans les Réglages (⚙︎).', 4000);

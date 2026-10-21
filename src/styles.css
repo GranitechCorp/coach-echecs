@@ -262,3 +262,5 @@ coords { font-size: 9px; }
 .chart .cross { stroke: var(--muted); stroke-width: 0.75; stroke-dasharray: 2 2; }
 .chart .hover { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
 .chart .tip { position: absolute; top: -6px; width: 150px; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 0.78rem; pointer-events: none; }
+
+.coach-local { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; font-size: 0.92rem; }

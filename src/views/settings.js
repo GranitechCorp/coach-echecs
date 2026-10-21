@@ -9,7 +9,9 @@ export function render(root) {
   const s = db();
   root.innerHTML = `
     <section class="card">
-      <h2>✨ Coach IA (Claude)</h2>
+      <h2>✨ Coach IA (Claude) — facultatif</h2>
+      <label class="switch"><input type="checkbox" id="ai-on" ${s.settings.aiEnabled ? 'checked' : ''}/> Afficher les boutons ✨ du coach IA</label>
+      <p class="small muted">Désactivé, l’appli fonctionne à 100 % en local : Stockfish analyse, et les explications, bilans, diagnostic et programme sont rédigés par l’appli elle-même. Claude n’est jamais utilisé tant que tu n’appuies pas sur un bouton ✨.</p>
       ${inClaudeViewer() ? '<p class="small"><b>Tu utilises l’appli dans claude.ai : le coach IA passe par ton compte Claude, aucune clé n’est nécessaire.</b> La première fois, claude.ai te demande l’autorisation. Laisse le champ ci-dessous vide.</p>' : ''}
       <p class="small">Facultatif : sans clé, l’appli explique déjà les coups avec Stockfish et ses propres règles. Avec une clé API Claude, tu obtiens en plus des explications rédigées par un vrai coach, des bilans de partie et des réponses à tes questions.</p>
       <p class="small muted">Crée une clé sur <b>console.anthropic.com</b> → « API Keys ». La clé reste sur ton téléphone et n’est envoyée qu’à api.anthropic.com. Mets une limite de dépense mensuelle dans la console pour garder le contrôle.</p>
@@ -40,6 +42,10 @@ export function render(root) {
       <p>Coach Échecs — appli personnelle et libre (GPL-3.0). Moteur : Stockfish 18 (GPL-3.0), échiquier : Chessground (Lichess, GPL-3.0), règles : chess.js, pièces : cburnett (CC BY-SA 3.0). Exercices en ligne : base de puzzles Lichess (CC0).</p>
     </section>`;
 
+  root.querySelector('#ai-on').onchange = (e) => {
+    update((d) => (d.settings.aiEnabled = e.target.checked));
+    toast(e.target.checked ? 'Coach IA activé' : 'Mode 100 % local');
+  };
   root.querySelector('#save-key').onclick = () => {
     update((d) => {
       d.settings.apiKey = root.querySelector('#key').value.trim();

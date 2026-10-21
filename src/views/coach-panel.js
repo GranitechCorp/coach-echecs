@@ -1,6 +1,7 @@
 // Panneau « coach » : explication maison immédiate + bouton pour l'explication IA (Claude).
 import { md, esc, toast } from '../ui.js';
 import { askCoach, coachReady } from '../coach-ai.js';
+import { aiEnabled } from '../local-coach.js';
 
 /**
  * Remplit `el` avec une explication. getPrompt() fabrique la demande IA (appelée seulement au clic).
@@ -12,7 +13,7 @@ export function showCoach(el, { title = '', paragraphs = [], getPrompt = null, e
     ${title ? `<div class="coach-title">${title}</div>` : ''}
     <div class="coach-txt">${md(paragraphs.join('\n'))}</div>
     <div class="coach-ai" hidden></div>
-    ${getPrompt ? '<button class="btn ai small" data-ai>✨ Explication détaillée du coach IA</button>' : ''}`;
+    ${getPrompt && aiEnabled() ? '<button class="btn ai small" data-ai>✨ Explication détaillée du coach IA</button>' : ''}`;
   const btn = el.querySelector('[data-ai]');
   btn?.addEventListener('click', async () => {
     if (!coachReady()) {

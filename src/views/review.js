@@ -11,6 +11,7 @@ import { showCoach } from './coach-panel.js';
 import { askCoach, coachReady } from '../coach-ai.js';
 import { analyzeGame, saveReview, cpOfEval } from '../analyzer.js';
 import { startGame } from './game.js';
+import { aiEnabled, gameSummaryLocal } from '../local-coach.js';
 
 export const tab = 'profile';
 const DEPTH = 12;
@@ -94,8 +95,9 @@ export function render(root, id, startIdx) {
         <svg class="graph" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><rect width="${W}" height="${H / 2}" class="g-black"/><line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" class="g-mid"/><polyline points="${pts}" class="g-line"/>${marks}</svg>
         <div class="row wrap">
           ${keyIdx.length ? `<button class="btn small" id="first-key">🎯 Voir mes erreurs (${keyIdx.length})</button>` : '<span class="muted small">Aucune grosse erreur : bravo !</span>'}
-          <button class="btn ai small" id="ai-summary">✨ Bilan du coach IA</button>
+          ${aiEnabled() ? '<button class="btn ai small" id="ai-summary">✨ Bilan rédigé par Claude</button>' : ''}
         </div>
+        <div class="coach-local">${md(gameSummaryLocal(game, r, sans).join('\n'))}</div>
         <div class="coach" id="summary" hidden></div>
       </section>
       <div class="board-row"><div class="board-box" id="board"></div></div>
@@ -191,7 +193,8 @@ export function render(root, id, startIdx) {
       show(keyIdx[0]);
       root.querySelector('#board').scrollIntoView({ behavior: 'smooth' });
     });
-    root.querySelector('#ai-summary').onclick = async (e) => {
+    const aiBtn = root.querySelector('#ai-summary');
+    if (aiBtn) aiBtn.onclick = async (e) => {
       if (!coachReady()) return toast('Ajoute ta clé API Claude dans les Réglages (⚙︎) pour le bilan IA.', 4000);
       const out = root.querySelector('#summary');
       out.hidden = false;

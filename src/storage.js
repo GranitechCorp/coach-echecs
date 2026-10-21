@@ -9,6 +9,7 @@ const DEFAULTS = () => ({
     showEvalDefault: false,
     liveCoach: true,
     sound: true,
+    aiEnabled: false, // boutons ✨ (Claude) masqués par défaut : tout fonctionne en local
   },
   profile: { startElo: 900, goalElo: 1600, chesscomUser: 'Granitech', currentElo: null },
   games: [], // { id, date, pgn, white, black, result, source, botElo, userColor, review? }

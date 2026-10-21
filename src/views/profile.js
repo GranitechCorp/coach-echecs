@@ -11,6 +11,7 @@ import { skillBars, lineChart, attachLineTooltip } from '../charts.js';
 import { THEME_LABELS } from '../data/themes.js';
 import { OPENING_LINES } from '../data/openings.js';
 import { askCoach, coachReady, inClaudeViewer } from '../coach-ai.js';
+import { aiEnabled, profileReportLocal } from '../local-coach.js';
 import { promptProfileReport } from '../prompts.js';
 
 export const tab = 'profile';
@@ -154,12 +155,17 @@ export function render(root) {
         <p class="muted small">Ces conseils viennent de règles simples (ton style mesuré, tes résultats par ouverture, la quantité de théorie adaptée à ton niveau). Pour un avis plus nuancé, demande le rapport du coach IA ci-dessous.</p>
       </section>
 
-      <section class="card">
+      ${ins.analysed >= 3 ? `<section class="card">
+        <h2>Ton bilan de coach</h2>
+        <div class="coach-local">${md(profileReportLocal(ins, recs).join('\n'))}</div>
+      </section>` : ''}
+
+      ${aiEnabled() ? `<section class="card">
         <h2>✨ Rapport complet du coach IA</h2>
         <p class="small muted">Claude lit tout ton diagnostic et rédige un bilan, des conseils d’ouvertures et un plan sur 4 semaines.</p>
         <button class="btn ai" id="ai-report" ${ins.analysed < 3 ? 'disabled' : ''}>Demander mon rapport</button>
         <div id="ai-out">${s.aiReport ? `<p class="muted small">Dernier rapport : ${new Date(s.aiReport.date).toLocaleDateString('fr-FR')}</p>${md(s.aiReport.text)}` : ''}</div>
-      </section>`;
+      </section>` : ''}`;
 
     // graphiques
     const rc = s.ratingClass || 'rapid';
@@ -238,7 +244,8 @@ export function render(root) {
     };
     root.querySelector('#gen')?.addEventListener('click', gen);
     root.querySelector('#regen')?.addEventListener('click', gen);
-    root.querySelector('#ai-report').onclick = async (e) => {
+    const aiReportBtn = root.querySelector('#ai-report');
+    if (aiReportBtn) aiReportBtn.onclick = async (e) => {
       if (!coachReady()) return toast('Ajoute ta clé API Claude dans les Réglages (⚙︎).', 4000);
       const out = root.querySelector('#ai-out');
       e.target.disabled = true;
