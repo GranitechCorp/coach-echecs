@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1b1f24" />
+  <meta name="description" content="Coach d'échecs perso : parties contre l'ordinateur, bilans, cours et exercices." />
+  <title>Coach Échecs</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn" id="back-btn" aria-label="Retour" hidden>←</button>
+    <h1 id="page-title">Coach Échecs</h1>
+    <a class="icon-btn" href="#/settings" aria-label="Réglages">⚙︎</a>
+  </header>
+  <main id="app"></main>
+  <nav class="tabbar" id="tabbar">
+    <a href="#/" data-tab="home"><span>⌂</span>Accueil</a>
+    <a href="#/play" data-tab="play"><span>♟</span>Jouer</a>
+    <a href="#/puzzles" data-tab="puzzles"><span>✦</span>Exercices</a>
+    <a href="#/learn" data-tab="learn"><span>❖</span>Cours</a>
+    <a href="#/analysis" data-tab="analysis"><span>⌕</span>Analyse</a>
+  </nav>
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

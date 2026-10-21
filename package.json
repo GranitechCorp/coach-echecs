@@ -1,0 +1,22 @@
+{
+  "name": "coach-echecs",
+  "version": "1.0.0",
+  "description": "Coach d’échecs perso (PWA) : jouer contre Stockfish, bilans, cours et exercices.",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "check": "node scripts/verify-content.mjs"
+  },
+  "license": "GPL-3.0-or-later",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.0.0",
+    "@lichess-org/chessground": "^10.1.1",
+    "chess.js": "^1.4.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.5"
+  },
+  "private": true,
+  "type": "module"
+}
