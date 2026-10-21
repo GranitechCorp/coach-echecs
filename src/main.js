@@ -2,6 +2,11 @@ import '@lichess-org/chessground/assets/chessground.base.css';
 import '@lichess-org/chessground/assets/chessground.brown.css';
 import '@lichess-org/chessground/assets/chessground.cburnett.css';
 import './styles.css';
+import './styles/vision.css';
+import './styles/training.css';
+import './styles/guess.css';
+import './styles/self-review.css';
+import './styles/review-intel.css';
 
 import { load, touchStreak } from './storage.js';
 import * as home from './views/home.js';
@@ -16,6 +21,12 @@ import * as analysis from './views/analysis.js';
 import * as freeBoard from './views/free-board.js';
 import * as settings from './views/settings.js';
 import * as profile from './views/profile.js';
+import * as train from './views/train.js';
+import * as vision from './views/vision.js';
+import * as rush from './views/rush.js';
+import * as woodpecker from './views/woodpecker.js';
+import * as selfReview from './views/self-review.js';
+import * as guess from './views/guess.js';
 import { autoSync } from './chesscom.js';
 
 const routes = [
@@ -31,6 +42,12 @@ const routes = [
   [/^#\/profile$/, profile],
   [/^#\/board(?:\/(.+))?$/, freeBoard],
   [/^#\/settings$/, settings],
+  [/^#\/train$/, train],
+  [/^#\/vision(?:\/(\w+))?$/, vision],
+  [/^#\/rush$/, rush],
+  [/^#\/woodpecker$/, woodpecker],
+  [/^#\/selfreview\/([\w-]+)$/, selfReview],
+  [/^#\/guess(?:\/([\w-]+))?$/, guess],
 ];
 
 const app = document.getElementById('app');
