@@ -258,13 +258,13 @@ export function pvMaterialSwing(fen, pv, color, plies = 6) {
 }
 
 export const CLASSES = {
-  best: { label: 'Meilleur coup', sym: '★', css: 'best' },
-  excellent: { label: 'Excellent', sym: '!', css: 'excellent' },
-  good: { label: 'Bon coup', sym: '✓', css: 'good' },
-  book: { label: 'Théorie', sym: '📖', css: 'book' },
-  inaccuracy: { label: 'Imprécision', sym: '?!', css: 'inaccuracy' },
-  mistake: { label: 'Erreur', sym: '?', css: 'mistake' },
-  blunder: { label: 'Gaffe', sym: '??', css: 'blunder' },
+  best: { label: 'Meilleur coup', plural: 'Meilleurs coups', sym: '★', css: 'best' },
+  excellent: { label: 'Excellent', plural: 'Excellents', sym: '!', css: 'excellent' },
+  good: { label: 'Bon coup', plural: 'Bons coups', sym: '✓', css: 'good' },
+  book: { label: 'Théorie', plural: 'Coups de théorie', sym: '📖', css: 'book' },
+  inaccuracy: { label: 'Imprécision', plural: 'Imprécisions', sym: '?!', css: 'inaccuracy' },
+  mistake: { label: 'Erreur', plural: 'Erreurs', sym: '?', css: 'mistake' },
+  blunder: { label: 'Gaffe', plural: 'Gaffes', sym: '??', css: 'blunder' },
 };
 
 /**

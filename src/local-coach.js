@@ -12,6 +12,8 @@ import { fig, uciToSan } from './chessutil.js';
 export const aiEnabled = () => db().settings.aiEnabled === true;
 
 const moveLabel = (i) => `${Math.floor(i / 2) + 1}${i % 2 === 0 ? '.' : '…'}`;
+/** En toutes lettres pour les phrases : « au 5e coup des Blancs » */
+const moveWords = (i) => `${Math.floor(i / 2) + 1 === 1 ? '1er' : `${Math.floor(i / 2) + 1}e`} coup des ${i % 2 === 0 ? 'Blancs' : 'Noirs'}`;
 
 /** Ce que dit le répertoire sur l'ouverture de la partie (sortie de ligne, coup prévu). */
 export function openingNote(sans, userColor) {
@@ -23,9 +25,9 @@ export function openingNote(sans, userColor) {
   const expected = line[i];
   const whoseMove = i % 2 === 0 ? 'w' : 'b';
   if (whoseMove === userColor) {
-    return `Au coup ${moveLabel(i)}, tu as quitté ta ligne « ${m.line.name} » en jouant ${fig(sans[i])}. Le coup prévu était **${fig(expected.san)}**${expected.comment ? ` : ${expected.comment}` : '.'}`;
+    return `Au ${moveWords(i)}, tu as quitté ta ligne « ${m.line.name} » en jouant ${fig(sans[i])}. Le coup prévu était **${fig(expected.san)}**${expected.comment ? ` : ${expected.comment}` : '.'}`;
   }
-  return `Au coup ${moveLabel(i)}, ton adversaire a quitté la ligne « ${m.line.name} » (${fig(sans[i])} au lieu de ${fig(expected.san)}). À partir de là, applique les principes : développement, roque, centre.`;
+  return `Au ${moveWords(i)}, ton adversaire a quitté la ligne « ${m.line.name} » (${fig(sans[i])} au lieu de ${fig(expected.san)}). À partir de là, applique les principes : développement, roque, centre.`;
 }
 
 /** Bilan d'une partie analysée, rédigé sans IA. */

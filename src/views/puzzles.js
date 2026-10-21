@@ -170,7 +170,7 @@ export function render(root, mode = 'tactics', presetTheme = null) {
       fen: p.fen,
       solution: p.solution,
       allowOthers: p.allowOthers,
-      prompt: p.prompt || `Trait aux ${p.fen.split(' ')[1] === 'w' ? 'Blancs' : 'Noirs'} : trouve le meilleur coup.${p.rating ? ` <small class="muted">(exercice ${p.rating})</small>` : ''}`,
+      prompt: p.prompt || `Trait aux ${p.fen.split(' ')[1] === 'w' ? 'Blancs' : 'Noirs'} : trouve le meilleur coup.${p.rating ? ` *(niveau ${p.rating})*` : ''}`,
       success: themesFr.length ? `Thème : ${themesFr.join(', ')}.` : '',
       onResult: (ok, first) => {
         const win = ok && first;

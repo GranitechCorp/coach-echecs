@@ -12,6 +12,7 @@ import { askCoach, coachReady } from '../coach-ai.js';
 import { analyzeGame, saveReview, cpOfEval } from '../analyzer.js';
 import { startGame } from './game.js';
 import { aiEnabled, gameSummaryLocal } from '../local-coach.js';
+import { frOpening } from '../data/opening-names.js';
 
 export const tab = 'profile';
 const DEPTH = 12;
@@ -83,14 +84,14 @@ export function render(root, id, startIdx) {
     root.innerHTML = `
       <section class="card">
         <div class="row between"><b>${esc(headers.White || '?')} – ${esc(headers.Black || '?')}</b><span class="badge">${esc(headers.Result || game.result || '')}</span></div>
-        ${r.opening ? `<p class="muted small">📖 ${esc(r.opening)}</p>` : ''}
+        ${r.opening ? `<p class="muted small">📖 ${esc(frOpening(r.opening))}</p>` : ''}
         <div class="acc-row">
           <div><div class="big">${Math.round(r.accuracy[me])}%</div><div class="muted small">ta précision</div></div>
           <div><div class="big muted">${Math.round(r.accuracy[them])}%</div><div class="muted small">adversaire</div></div>
         </div>
         <div class="counts">${order
           .filter((c) => r.counts[me][c])
-          .map((c) => `<span class="badge c-${CLASSES[c].css}">${CLASSES[c].sym} ${r.counts[me][c]} ${CLASSES[c].label.toLowerCase()}</span>`)
+          .map((c) => `<span class="badge c-${CLASSES[c].css}">${CLASSES[c].sym} ${r.counts[me][c]} ${(r.counts[me][c] > 1 ? CLASSES[c].plural : CLASSES[c].label).toLowerCase()}</span>`)
           .join('')}</div>
         <svg class="graph" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><rect width="${W}" height="${H / 2}" class="g-black"/><line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" class="g-mid"/><polyline points="${pts}" class="g-line"/>${marks}</svg>
         <div class="row wrap">
@@ -139,7 +140,7 @@ export function render(root, id, startIdx) {
       const linesA = after.pv.length ? [{ pv: after.pv, white: after.white }] : [];
       let paras;
       if (['inaccuracy', 'mistake', 'blunder'].includes(cls)) paras = explainMistake(fens[cur], played, linesB, linesA);
-      else if (cls === 'book') paras = [`Coup de théorie (${esc(r.opening || 'ouverture')}).`];
+      else if (cls === 'book') paras = [`Coup de théorie (${frOpening(r.opening) || 'ouverture'}).`];
       else {
         const facts = describeMove(fens[cur], played).facts;
         paras = [...facts.map((f) => '• ' + f)];

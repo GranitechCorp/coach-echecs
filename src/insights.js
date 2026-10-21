@@ -3,6 +3,7 @@
 import { ensureDerived } from './analyzer.js';
 import { LESSONS } from './data/lessons.js';
 import { OPENING_LINES } from './data/openings.js';
+import { frOpening } from './data/opening-names.js';
 
 export const CATEGORIES = {
   'piece-en-prise': { label: 'Pièces laissées en prise', lessons: ['routine', 'valeurs'], theme: 'hangingPiece', tip: 'Avant chaque coup : « après mon coup, une de mes pièces est-elle attaquée sans être assez défendue ? »' },
@@ -246,7 +247,7 @@ function rankWeaknesses({ n, cats, catsRaw, catsGames, examples, skills, bpg, op
     list.push({ id: 'endgame-skill', title: 'Les finales', priority: (avgSkill - skills.endgame) / 10, detail: `Précision en finale ${skills.endgame} % contre ${Math.round(avgSkill)} % en moyenne`, tip: CATEGORIES.finale.tip, lessons: ['pions', 'tours', 'mat-tour'], theme: 'endgame', examples: [] });
   }
   for (const o of openingList.filter((x) => x.problem).slice(0, 2)) {
-    list.push({ id: 'opening:' + o.color + o.family, title: `Ouverture : ${o.family} (${o.color === 'w' ? 'Blancs' : 'Noirs'})`, priority: 0.6 + (o.n / 20), detail: `${o.n} parties, ${o.scorePct ?? '?'} % de points${o.evalAt20 !== null ? `, éval. moyenne au coup 10 : ${(o.evalAt20 / 100).toFixed(1)}` : ''}`, tip: 'Revois les lignes de cette ouverture dans « Cours → Ouvertures » et analyse tes défaites dans cette ouverture.', lessons: ['principes'], theme: 'opening', opening: o, examples: [] });
+    list.push({ id: 'opening:' + o.color + o.family, title: `Ouverture : ${frOpening(o.family)} (${o.color === 'w' ? 'Blancs' : 'Noirs'})`, priority: 0.6 + (o.n / 20), detail: `${o.n} parties, ${o.scorePct ?? '?'} % de points${o.evalAt20 !== null ? `, éval. moyenne au coup 10 : ${(o.evalAt20 / 100).toFixed(1)}` : ''}`, tip: 'Revois les lignes de cette ouverture dans « Cours → Ouvertures » et analyse tes défaites dans cette ouverture.', lessons: ['principes'], theme: 'opening', opening: o, examples: [] });
   }
   if (bpg !== null && bpg > 1.5 && !list.some((x) => x.id === 'piece-en-prise')) {
     list.push({ id: 'blunders', title: 'Trop de gaffes', priority: bpg / 2, detail: `${Math.round(bpg * 10) / 10} gaffe(s) par partie`, tip: CATEGORIES['piece-en-prise'].tip, lessons: ['routine'], theme: 'hangingPiece', examples: [] });

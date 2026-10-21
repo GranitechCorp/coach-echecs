@@ -9,6 +9,7 @@ import { recommendOpenings, SLOTS } from '../advisor.js';
 import { buildProgram, isDone, itemHref } from '../program.js';
 import { skillBars, lineChart, attachLineTooltip } from '../charts.js';
 import { THEME_LABELS } from '../data/themes.js';
+import { frOpening } from '../data/opening-names.js';
 import { OPENING_LINES } from '../data/openings.js';
 import { askCoach, coachReady, inClaudeViewer } from '../coach-ai.js';
 import { aiEnabled, profileReportLocal } from '../local-coach.js';
@@ -124,7 +125,7 @@ export function render(root) {
           return `<h4>${c === 'w' ? '⚪ Avec les Blancs' : '⚫ Avec les Noirs'}</h4>${list.length ? `<table class="otable"><thead><tr><th>Ouverture</th><th>Parties</th><th>Points</th><th>Coup 10</th></tr></thead><tbody>${list
             .map((o) => {
               const lines = linesForFamily(o.family, c);
-              return `<tr class="${o.problem ? 'warn' : ''}"><td>${o.problem ? '⚠ ' : ''}${lines.length ? `<a href="#/opening/${lines[0].id}/learn">${esc(o.family)}</a>` : esc(o.family)}</td><td>${o.n}</td><td>${o.scorePct ?? '—'} %</td><td>${o.evalAt20 === null ? '—' : (o.evalAt20 > 0 ? '+' : '') + (o.evalAt20 / 100).toFixed(1)}</td></tr>`;
+              return `<tr class="${o.problem ? 'warn' : ''}"><td>${o.problem ? '⚠ ' : ''}${lines.length ? `<a href="#/opening/${lines[0].id}/learn">${esc(frOpening(o.family))}</a>` : esc(frOpening(o.family))}</td><td>${o.n}</td><td>${o.scorePct ?? '—'} %</td><td>${o.evalAt20 === null ? '—' : (o.evalAt20 > 0 ? '+' : '') + (o.evalAt20 / 100).toFixed(1)}</td></tr>`;
             })
             .join('')}</tbody></table>` : '<p class="muted small">Pas encore de parties.</p>'}`;
         }).join('')}
