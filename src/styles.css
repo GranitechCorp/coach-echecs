@@ -225,3 +225,35 @@ coords { font-size: 9px; }
 @media (min-width: 900px) {
   main { max-width: 760px; }
 }
+
+/* ─── Progrès ─── */
+.skills { display: flex; flex-direction: column; gap: 4px; }
+.skill summary { display: grid; grid-template-columns: 9.5em 1fr 2.2em; align-items: center; gap: 8px; cursor: pointer; list-style: none; padding: 4px 0; }
+.skill summary::-webkit-details-marker { display: none; }
+.skill-label { font-size: 0.88rem; }
+.skill-track { height: 10px; background: var(--bg2); border-radius: 5px; overflow: hidden; }
+.skill-fill { display: block; height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; }
+.skill-val { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.weak { border-top: 1px solid var(--line); padding: 10px 0; }
+.weak-head { display: flex; gap: 8px; align-items: center; }
+.weak-rank { width: 22px; height: 22px; border-radius: 50%; background: var(--card2); display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; flex: none; }
+.day { border-top: 1px solid var(--line); padding: 6px 0; }
+.day summary { cursor: pointer; padding: 4px 0; text-transform: capitalize; }
+.day .todo:first-of-type { border-top: 0; }
+.otable { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 4px 0 10px; }
+.otable th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px; }
+.otable td { padding: 6px 4px; border-top: 1px solid var(--line); }
+.otable td:not(:first-child), .otable th:not(:first-child) { text-align: right; white-space: nowrap; }
+.otable a { text-decoration: underline; text-decoration-color: var(--line); }
+.otable tr.warn td:first-child { color: var(--c-mistake); }
+.rec { border-top: 1px solid var(--line); padding: 10px 0; }
+.rec-best { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 2px 0; }
+.chart { position: relative; touch-action: pan-y; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart .grid { stroke: var(--line); stroke-width: 0.5; }
+.chart .tick { fill: var(--muted); font-size: 9px; }
+.chart .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .end { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
+.chart .cross { stroke: var(--muted); stroke-width: 0.75; stroke-dasharray: 2 2; }
+.chart .hover { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
+.chart .tip { position: absolute; top: -6px; width: 150px; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 0.78rem; pointer-events: none; }

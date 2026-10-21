@@ -95,3 +95,50 @@ ${linesBlock(fen, lines || [])}
 
 Réponds précisément à ma question, en t'appuyant sur ces lignes. 150 mots maximum.`;
 }
+
+/** Rapport complet sur le joueur : diagnostic, priorités, ouvertures, plan sur 4 semaines. */
+export function promptProfileReport({ ins, recs, profile, ratings, skillsLabels, slots }) {
+  const skills = skillsLabels.map((s) => `- ${s.label} : ${ins.skills[s.id] ?? 'données insuffisantes'}${ins.skills[s.id] !== null ? '/100' : ''}`).join('\n');
+  const weak = ins.weaknesses.map((w, i) => `${i + 1}. ${w.title} — ${w.detail}`).join('\n') || '(pas assez de données)';
+  const ex = ins.weaknesses
+    .flatMap((w) => w.examples.slice(-1).map((e) => `- [${w.title}] Position ${e.fen} : j'ai joué ${uciToSan(e.fen, e.played)}, il fallait ${e.best ? uciToSan(e.fen, e.best) : '?'}.`))
+    .slice(0, 4)
+    .join('\n');
+  const op = ins.openings
+    .slice(0, 10)
+    .map((o) => `- ${o.color === 'w' ? 'Blancs' : 'Noirs'} · ${o.family} : ${o.n} parties, ${o.scorePct ?? '?'} % de points${o.evalAt20 !== null ? `, éval. moyenne au coup 10 : ${(o.evalAt20 / 100).toFixed(1)}` : ''}`)
+    .join('\n');
+  const st = ins.style;
+  const rec = Object.entries(recs)
+    .map(([slot, list]) => `- ${slots[slot]} : ${list.slice(0, 2).map((c) => `${c.name} (${c.reasons.join(' ; ')})`).join(' / ')}`)
+    .join('\n');
+  const r = ratings ? Object.entries(ratings).map(([k, v]) => `${k} ${v.rating}`).join(', ') : 'inconnu';
+  return `Voici le profil de mon jeu, calculé par mon application à partir de ${ins.analysed} parties analysées par Stockfish (sur ${ins.total} parties). Fais-moi un vrai bilan de coach.
+
+Classements chess.com : ${r}. Objectif : ${profile.goalElo}.
+Gaffes par partie : ${ins.bpg !== null ? ins.bpg.toFixed(1) : '?'} ; erreurs : ${ins.mistakes} ; gaffes : ${ins.blunders}.
+
+Compétences (0-100) :
+${skills}
+
+Faiblesses classées par l'application :
+${weak}
+
+Exemples d'erreurs typiques :
+${ex || '(aucun)'}
+
+Mes ouvertures :
+${op || '(aucune donnée)'}
+
+Style mesuré : ${st.label} (part de captures/échecs dans l'ouverture et le début de milieu : ${st.activity ?? '?'} % ; roque tardif ou absent : ${st.lateCastlePct ?? '?'} % des parties ; dame sortie avant le coup 6 : ${st.earlyQueenPct ?? '?'} % ; ${st.openPerf !== null ? `écart de score positions ouvertes − fermées : ${Math.round(st.openPerf * 100)} points de %` : 'pas assez de données ouvertes/fermées'}).
+
+Recommandations d'ouvertures calculées par l'application :
+${rec}
+
+Rédige :
+1. **Diagnostic** : ce qui me coûte le plus de points et pourquoi (sois concret, appuie-toi sur les chiffres).
+2. **Mes forces** à exploiter.
+3. **Ouvertures** : garde-t-on le Gambit Dame et la Caro-Kann ? Quelles variantes privilégier ou quoi changer, et pourquoi selon mon style. Reste prudent : ne recommande que des ouvertures citées ci-dessus.
+4. **Plan sur 4 semaines** : semaine par semaine, avec des exercices faisables dans l'application (exercices par thème, leçons, entraînement d'ouverture, parties contre l'ordinateur, « Mes erreurs »).
+350 mots maximum.`;
+}

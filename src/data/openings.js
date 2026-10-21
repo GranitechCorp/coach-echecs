@@ -27,6 +27,41 @@ export const OPENING_GROUPS = [
     name: 'Contre 1.d4 : la Slave',
     intro: `La Slave (1.d4 d5 2.c4 c6) est la « cousine » de la Caro-Kann : même pion c6, même fou qui sort en f5 avant e6. Si tu aimes la Caro-Kann, c'est la défense idéale contre 1.d4 et le Gambit Dame.`,
   },
+  {
+    id: 'london',
+    side: 'w',
+    extra: true,
+    name: 'Système de Londres',
+    intro: `Le Système de Londres (1.d4, 2.Ff4, e3, Cf3, c3, Cbd2, Fd3) : presque toujours le même placement de pièces quoi que fassent les Noirs. Très peu de théorie, plans simples : idéal pour se concentrer sur le milieu de partie.`,
+  },
+  {
+    id: 'italian',
+    side: 'w',
+    extra: true,
+    name: 'Partie italienne (1.e4 e5)',
+    intro: `La Partie italienne (1.e4 e5 2.Cf3 Cc6 3.Fc4) : développement rapide, le fou vise f7, jeu ouvert et tactique. Attention : passer à 1.e4 demande aussi des réponses à la Sicilienne, la Française, la Caro-Kann…`,
+  },
+  {
+    id: 'e5',
+    side: 'b',
+    extra: true,
+    name: 'Contre 1.e4 : 1…e5 (jeu ouvert)',
+    intro: `1…e5 : la réponse classique. Positions ouvertes, développement rapide, beaucoup de tactique. Il faut connaître quelques pièges (Fried Liver, Écossaise…) mais les principes d'ouverture suffisent souvent.`,
+  },
+  {
+    id: 'scandi',
+    side: 'b',
+    extra: true,
+    name: 'Contre 1.e4 : la Scandinave (1…d5)',
+    intro: `La Scandinave (1.e4 d5 2.exd5 Dxd5) : tu imposes ta structure dès le 1er coup. Peu de théorie, plan très clair (…Da5, …Cf6, …c6, …Ff5, …e6), proche de la Caro-Kann dans l'esprit.`,
+  },
+  {
+    id: 'qgd-black',
+    side: 'b',
+    extra: true,
+    name: 'Contre 1.d4 : Gambit Dame Refusé',
+    intro: `Le Gambit Dame Refusé avec les Noirs (1.d4 d5 2.c4 e6) : la défense la plus classique. Solide, et tu connais déjà ses idées depuis le côté blanc !`,
+  },
 ];
 
 export const OPENING_LINES = [
@@ -208,6 +243,97 @@ export const OPENING_LINES = [
     group: 'slav',
     name: 'Contre le Système de Londres (2.Ff4)',
     moves: `d4 d5 Bf4{Le Système de Londres, très populaire à ton niveau.} Nf6 e3 c5{Contre le Londres, on attaque d4 tout de suite.} c3 Nc6 Nd2 e6 Ngf3 Bd6{On propose l'échange du fou f4.} Bg3 O-O Bd3 b6{Le fou ira en b7 ; position confortable.}`,
+  },
+  // ───────────── Ouvertures recommandables (selon ton profil) ─────────────
+  {
+    id: 'london-main',
+    group: 'london',
+    name: 'Londres contre …d5 et …c5',
+    moves: `d4{Comme dans le Gambit Dame.} d5 Bf4{Le fou sort AVANT e3 : c'est toute l'idée du Londres.} Nf6 e3 e6 Nf3 c5 c3{La pyramide c3-d4-e3 : solide comme un roc.} Nc6 Nbd2 Bd6 Bg3{On garde le fou : s'il prend en g3, on reprend hxg3 et la colonne h s'ouvre.} O-O Bd3{Le fou vise h7 : plan d'attaque avec Ce5, f4, Df3.}`,
+  },
+  {
+    id: 'london-qb6',
+    group: 'london',
+    name: 'Londres : la menace …Db6',
+    moves: `d4 d5 Bf4 c5 e3 Nc6 c3 Qb6{La dame attaque b2 : c'est LE piège à connaître contre le Londres.} Qb3{On propose l'échange des dames : b2 est protégé.} c4 Qxb6 axb6 Nd2{Le cavalier va contrôler c4/e4 ; finale égale et facile à jouer.}`,
+  },
+  {
+    id: 'london-kid',
+    group: 'london',
+    name: 'Londres contre …g6 (setup indien)',
+    moves: `d4 Nf6 Bf4 g6 e3 Bg7 Nf3 O-O Be2{Contre le fianchetto, le fou e2 est plus sûr.} d6 h3{Une case de retraite pour le fou f4, et pas de …Cg4/…Ch5 gênant.} c5 c3{Même pyramide de pions, même plan.}`,
+  },
+  {
+    id: 'italian-giuoco',
+    group: 'italian',
+    name: 'Giuoco Piano (3…Fc5)',
+    moves: `e4 e5 Nf3{Attaque e5 en développant.} Nc6 Bc4{Le fou vise f7, le point faible des Noirs.} Bc5 c3{Prépare d4 pour prendre le centre.} Nf6 d3{Version calme : on consolide e4 avant d'agir.} d6 O-O O-O Re1 a6 Bb3{On garde le fou sur la diagonale a2-g8.} Ba7 Nbd2{Le cavalier ira en f1 puis g3 : manœuvre typique.}`,
+  },
+  {
+    id: 'italian-2knights',
+    group: 'italian',
+    name: 'Contre les Deux Cavaliers (3…Cf6)',
+    moves: `e4 e5 Nf3 Nc6 Bc4 Nf6 d3{Simple et solide : on protège e4 et on évite les complications.} Be7 O-O O-O Re1 d6 c3{Comme dans le Giuoco Piano : plan h3, Cbd2-f1-g3.}`,
+  },
+  {
+    id: 'italian-petrov',
+    group: 'italian',
+    name: 'Contre la Petrov (2…Cf6)',
+    moves: `e4 e5 Nf3 Nf6{La défense Petrov : symétrique.} Nxe5 d6{Attention : 3…Cxe4?? 4.De2 et si 4…Cf6?? 5.Cc6+ gagne la dame !} Nf3 Nxe4 d4 d5 Bd3{Développement naturel, légèrement mieux pour les Blancs.}`,
+  },
+  {
+    id: 'e5-italian',
+    group: 'e5',
+    name: '1…e5 contre l’Italienne',
+    moves: `e4 e5{On prend sa part du centre.} Nf3 Nc6{Défend e5 en développant.} Bc4 Bc5{Le fou vise f2, le point faible des Blancs.} c3 Nf6{On attaque e4.} d3 d6 O-O O-O Re1 a6{Une case pour le fou en a7 s'il est attaqué par b4 ou d4.}`,
+  },
+  {
+    id: 'e5-ruy',
+    group: 'e5',
+    name: '1…e5 contre l’Espagnole (3.Fb5)',
+    moves: `e4 e5 Nf3 Nc6 Bb5{L'Espagnole : le fou attaque le défenseur de e5.} a6{On chasse le fou tout de suite.} Ba4 Nf6 O-O Be7{Solide : on se prépare à roquer.} Re1 b5 Bb3 d6 c3 O-O{L'Espagnole fermée : position riche et équilibrée.}`,
+  },
+  {
+    id: 'e5-scotch',
+    group: 'e5',
+    name: '1…e5 contre l’Écossaise (3.d4)',
+    moves: `e4 e5 Nf3 Nc6 d4 exd4 Nxd4 Bc5{Le fou attaque le cavalier d4.} Be3 Qf6{Pression sur d4 avec la dame et le fou.} c3 Nge7{Développement : le cavalier ne bloque pas la dame f6.}`,
+  },
+  {
+    id: 'e5-friedliver',
+    group: 'e5',
+    name: '1…e5 : contre 4.Cg5 (Fried Liver)',
+    moves: `e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5{Les Blancs attaquent f7 avec le cavalier et le fou.} d5{La seule bonne défense : on bloque la diagonale du fou.} exd5 Na5{Surtout pas 5…Cxd5?! qui permet le sacrifice 6.Cxf7 (Fried Liver). On chasse le fou.} Bb5+ c6 dxc6 bxc6 Be2 h6{On chasse le cavalier : les Noirs ont un pion de moins mais beaucoup d'activité.} Nf3 e4 Ne5`,
+  },
+  {
+    id: 'scandi-main',
+    group: 'scandi',
+    name: 'Scandinave principale (3…Da5)',
+    moves: `e4 d5{Tu attaques e4 tout de suite.} exd5 Qxd5 Nc3 Qa5{La dame se met à l'abri sur a5, d'où elle cloue le cavalier c3.} d4 Nf6 Nf3 c6{Une case de retraite pour la dame (c7) et contrôle de d5.} Bc4 Bf5{Le fou sort avant …e6, comme dans la Caro-Kann.} Bd2 e6{Structure solide ; tu roques ensuite et le plan est simple.}`,
+  },
+  {
+    id: 'scandi-d4',
+    group: 'scandi',
+    name: 'Scandinave sans 3.Cc3',
+    moves: `e4 d5 exd5 Qxd5 d4 Nf6 Nf3 Bg4{Le fou cloue le cavalier f3.} Be2 e6 O-O Nc6{Pression sur d4 ; développement harmonieux.}`,
+  },
+  {
+    id: 'scandi-e5',
+    group: 'scandi',
+    name: 'Scandinave contre 2.e5',
+    moves: `e4 d5 e5{Les Blancs évitent l'échange.} Bf5{Comme dans la Caro-Kann avance : le fou sort.} d4 e6 Nf3 c5{Même plan : attaquer la base d4.}`,
+  },
+  {
+    id: 'qgd-black-main',
+    group: 'qgd-black',
+    name: 'GDR avec les Noirs (Tartakower)',
+    moves: `d4 d5 c4 e6{Solide : on soutient d5.} Nc3 Nf6 Bg5 Be7{On déloue le cavalier f6.} e3 O-O Nf3 h6{On pose la question au fou.} Bh4 b6{Le fou c8 ira en b7 : il n'est plus enfermé.} cxd5 Nxd5 Bxe7 Qxe7 Nxd5 exd5{Structure solide, le fou b7 sera actif.}`,
+  },
+  {
+    id: 'qgd-black-exchange',
+    group: 'qgd-black',
+    name: 'GDR avec les Noirs : variante d’échange',
+    moves: `d4 d5 c4 e6 Nc3 Nf6 cxd5 exd5{La diagonale du fou c8 s'ouvre !} Bg5 c6 e3 Be7 Bd3 Nbd7 Qc2 O-O{Attention à l'attaque des minorités (b4-b5) : réponds par …a6, …Te8, …Cf8.}`,
   },
 ];
 

@@ -1,6 +1,8 @@
 import { db } from '../storage.js';
 import { setTitle, esc } from '../ui.js';
 import { LESSONS, MODULES } from '../data/lessons.js';
+import { todayItems, isDone, itemHref } from '../program.js';
+import { computeInsights, filterGames } from '../insights.js';
 
 export const tab = 'home';
 
@@ -21,13 +23,19 @@ function nextLesson(s) {
 
 export function render(root) {
   setTitle('Coach Échecs');
+  const onSynced = () => root.isConnected && render(root);
+  document.addEventListener('games-synced', onSynced, { once: true });
   const s = db();
   const t = today();
   const puzzlesToday = s.puzzles.history.filter((h) => h.date?.startsWith(t)).length;
   const gamesToday = s.games.filter((g) => g.date?.startsWith(t)).length;
   const studiedToday = Object.values(s.lessons).some((l) => l.date?.startsWith(t)) || Object.values(s.openings).some((o) => o.last?.startsWith(t));
   const due = s.mistakes.filter((m) => m.due <= Date.now()).length;
-  const level = estimatedLevel(s);
+  const ccElo = s.ccRatings?.rapid?.rating || s.ccRatings?.blitz?.rating || null;
+  const level = ccElo || estimatedLevel(s);
+  const levelLabel = ccElo ? `Ton Elo chess.com (${s.ccRatings?.rapid ? 'rapide' : 'blitz'})` : 'Ton niveau estimé';
+  const items = todayItems();
+  const ins = computeInsights(filterGames(s.games, s.insightFilter || ['rapid', 'blitz', 'daily', 'bot']));
   const { startElo, goalElo } = s.profile;
   const pct = Math.max(2, Math.min(100, ((level - startElo) / (goalElo - startElo)) * 100));
   const lesson = nextLesson(s);
@@ -42,7 +50,7 @@ export function render(root) {
     <section class="card hero">
       <div class="row between">
         <div>
-          <div class="muted small">Ton niveau estimé</div>
+          <div class="muted small">${levelLabel}</div>
           <div class="big">${level}</div>
         </div>
         <div class="right">
@@ -59,13 +67,22 @@ export function render(root) {
 
     ${cur ? `<a class="card link-card resume" href="#/game"><b>▶ Reprendre ta partie</b><span class="muted">contre l’ordinateur ${cur.elo} — ${Math.ceil(cur.moves.length / 2)} coups joués</span></a>` : ''}
 
-    <section class="card">
+    ${items ? `<section class="card">
+      <div class="row between"><h2>Ton programme du jour</h2><a class="small muted" href="#/profile">semaine →</a></div>
+      ${items.map((it) => `<a class="todo ${isDone(it) ? 'done' : ''}" href="${itemHref(it)}"><span class="check"></span><span>${esc(it.label)}${it.why ? `<br/><small class="muted">pour : ${esc(it.why)}</small>` : ''}</span></a>`).join('')}
+    </section>` : `<section class="card">
       <h2>Plan du jour</h2>
       <a class="todo ${puzzlesToday >= 10 ? 'done' : ''}" href="#/puzzles"><span class="check"></span><span>10 exercices de tactique <small>(${Math.min(puzzlesToday, 10)}/10)</small></span></a>
       <a class="todo ${due === 0 ? 'done' : ''}" href="#/puzzles/mistakes"><span class="check"></span><span>Revoir mes erreurs <small>(${due} à revoir)</small></span></a>
       <a class="todo ${gamesToday >= 1 ? 'done' : ''}" href="#/play"><span class="check"></span><span>1 partie contre l’ordinateur + son bilan</span></a>
       <a class="todo ${studiedToday ? 'done' : ''}" href="${lesson ? `#/lesson/${lesson.id}` : '#/learn'}"><span class="check"></span><span>1 leçon ou 1 révision d’ouverture${lesson ? ` <small>(suivante : ${esc(lesson.title)})</small>` : ''}</span></a>
-    </section>
+      <a class="btn small" href="#/profile">✨ Créer mon programme personnalisé</a>
+    </section>`}
+
+    <a class="card link-card" href="#/profile">
+      <b>📈 Mon diagnostic</b>
+      <span class="muted small">${ins.analysed >= 3 && ins.weaknesses.length ? `Priorité n°1 : ${esc(ins.weaknesses[0].title)}` : `${s.games.filter((g) => g.source === 'chess.com').length} parties chess.com récupérées · ${ins.analysed} analysées — analyse-les pour ton diagnostic`}</span>
+    </a>
 
     ${weak.length ? `<section class="card"><h2>À travailler</h2>${weak
       .map(([th, v]) => `<p>• Thème « ${esc(th)} » : ${Math.round((100 * v.solved) / v.played)} % de réussite</p>`)
@@ -75,7 +92,7 @@ export function render(root) {
       <a class="tile" href="#/play"><span>♟</span>Jouer</a>
       <a class="tile" href="#/puzzles"><span>✦</span>Exercices</a>
       <a class="tile" href="#/learn"><span>❖</span>Cours & ouvertures</a>
-      <a class="tile" href="#/analysis"><span>⌕</span>Analyser mes parties chess.com</a>
+      <a class="tile" href="#/profile"><span>📈</span>Mes progrès & chess.com</a>
     </section>
 
     ${lastGames.length ? `<section class="card"><h2>Dernières parties</h2>${lastGames

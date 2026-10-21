@@ -4,37 +4,18 @@ import { db, update, uid } from '../storage.js';
 import { setTitle, esc, md, toast, moveListHtml, classBadge } from '../ui.js';
 import { createBoard, arrow } from '../board.js';
 import { getAnalysisEngine } from '../engine.js';
-import { parsePgn, uciOf, cpWhite, winPct, evalText, pvToSan, fig, uciToSan, cgColor } from '../chessutil.js';
-import { classifyMove, explainMistake, describeMove, CLASSES } from '../explain.js';
+import { parsePgn, uciOf, winPct, evalText, pvToSan, fig, uciToSan, cgColor } from '../chessutil.js';
+import { explainMistake, describeMove, CLASSES } from '../explain.js';
 import { promptPlayedMove, promptGameSummary } from '../prompts.js';
 import { showCoach } from './coach-panel.js';
 import { askCoach, coachReady } from '../coach-ai.js';
-import { OPENING_LINES, parseLine } from '../data/openings.js';
+import { analyzeGame, saveReview, cpOfEval } from '../analyzer.js';
 import { startGame } from './game.js';
 
-export const tab = 'analysis';
+export const tab = 'profile';
 const DEPTH = 12;
 
-/** Trouve la ligne de répertoire qui colle le plus longtemps à la partie. */
-function matchOpening(sans) {
-  let best = { len: 0, line: null };
-  for (const line of OPENING_LINES) {
-    const moves = parseLine(line.moves).map((m) => m.san);
-    let k = 0;
-    while (k < moves.length && k < sans.length && moves[k] === sans[k]) k++;
-    if (k > best.len) best = { len: k, line };
-  }
-  return best;
-}
-
-function openingName(headers, match) {
-  if (match.len >= 4) return match.line.name;
-  if (headers.Opening) return headers.Opening;
-  if (headers.ECOUrl) return decodeURIComponent(headers.ECOUrl.split('/').pop()).replace(/-/g, ' ');
-  return '';
-}
-
-export function render(root, id) {
+export function render(root, id, startIdx) {
   const s = db();
   const game = s.games.find((x) => x.id === id);
   if (!game) {
@@ -55,27 +36,26 @@ export function render(root, id) {
   let alive = true;
   let board = null;
 
-  if (!game.review || game.review.n !== moves.length) {
+  if (!game.review?.evals || game.review.n !== moves.length) {
     root.innerHTML = `
       <section class="card">
         <h2>Analyse en cours…</h2>
-        <p class="muted">Stockfish examine chaque coup (${moves.length} demi-coups). Garde l’écran allumé, ça prend environ ${Math.max(1, Math.round(moves.length * 0.6 / 60))} min.</p>
+        <p class="muted">Stockfish examine chaque coup (${moves.length} demi-coups). Garde l’écran allumé, ça prend environ ${Math.max(1, Math.round((moves.length * 0.6) / 60))} min.</p>
         <div class="progress"><div id="prog" style="width:0%"></div></div>
         <p class="small muted" id="prog-txt"></p>
       </section>`;
-    runAnalysis().then((review) => {
+    analyzeGame(game, {
+      depth: DEPTH,
+      isAlive: () => alive,
+      onProgress: (i, n) => {
+        const bar = root.querySelector('#prog');
+        if (!bar) return;
+        bar.style.width = Math.round((i / n) * 100) + '%';
+        root.querySelector('#prog-txt').textContent = `${i} / ${n} positions`;
+      },
+    }).then((review) => {
       if (!alive || !review) return;
-      update((d) => {
-        const gg = d.games.find((x) => x.id === id);
-        if (gg) gg.review = review;
-        // les erreurs de l'utilisateur deviennent des exercices personnels
-        for (const [i, cls] of review.classes.entries()) {
-          if (fens[i].split(' ')[1] !== game.userColor || !['mistake', 'blunder'].includes(cls)) continue;
-          if (d.mistakes.some((m) => m.fen === fens[i])) continue;
-          d.mistakes.push({ id: uid(), fen: fens[i], best: review.evals[i].pv[0], played: uciOf(moves[i]), gameId: id, box: 0, due: Date.now(), label: `${game.label || ''} — coup ${Math.floor(i / 2) + 1}` });
-        }
-        if (d.mistakes.length > 300) d.mistakes.splice(0, d.mistakes.length - 300);
-      });
+      saveReview(game, review);
       game.review = review;
       showReview();
     });
@@ -83,57 +63,11 @@ export function render(root, id) {
     showReview();
   }
 
-  async function runAnalysis() {
-    const evals = [];
-    for (let i = 0; i < fens.length; i++) {
-      if (!alive) return null;
-      const c = new Chess(fens[i]);
-      if (c.isGameOver()) {
-        evals.push({ pv: [], white: c.isCheckmate() ? { mate: 0 } : { cp: 0 }, over: c.isCheckmate() ? (c.turn() === 'w' ? 'b' : 'w') : 'draw' });
-      } else {
-        const r = await engine.search(fens[i], { depth: DEPTH });
-        const l = r.lines[0];
-        evals.push({ pv: (l?.pv || [r.bestmove]).slice(0, 8), white: l?.white || { cp: 0 } });
-      }
-      const pct = Math.round(((i + 1) / fens.length) * 100);
-      const bar = root.querySelector('#prog');
-      if (bar) {
-        bar.style.width = pct + '%';
-        root.querySelector('#prog-txt').textContent = `${i + 1} / ${fens.length} positions`;
-      }
-    }
-    const cpOf = (e) => (e.over ? (e.over === 'w' ? 10000 : e.over === 'b' ? -10000 : 0) : cpWhite(e));
-    const match = matchOpening(sans);
-    const classes = [];
-    const acc = { w: [], b: [] };
-    const counts = { w: {}, b: {} };
-    moves.forEach((m, i) => {
-      const color = m.color;
-      const res = classifyMove({ cpBefore: cpOf(evals[i]), cpAfter: cpOf(evals[i + 1]), color, isBest: evals[i].pv[0] === uciOf(m) });
-      let cls = res.cls;
-      if (i < match.len && res.loss < 5) cls = 'book';
-      classes.push(cls);
-      acc[color].push(res.accuracy);
-      counts[color][cls] = (counts[color][cls] || 0) + 1;
-    });
-    const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 100);
-    return {
-      n: moves.length,
-      depth: DEPTH,
-      evals,
-      classes,
-      counts,
-      accuracy: { w: avg(acc.w), b: avg(acc.b) },
-      opening: openingName(headers, match),
-      bookLen: match.len,
-    };
-  }
-
   function showReview() {
     const r = game.review;
     const me = game.userColor;
     const them = me === 'w' ? 'b' : 'w';
-    const cpOf = (e) => (e.over ? (e.over === 'w' ? 10000 : e.over === 'b' ? -10000 : 0) : cpWhite(e));
+    const cpOf = cpOfEval;
     const order = ['best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'blunder'];
     const keyIdx = r.classes.map((c, i) => i).filter((i) => moves[i].color === me && ['mistake', 'blunder'].includes(r.classes[i]));
 
@@ -287,8 +221,8 @@ export function render(root, id) {
       }
     };
 
-    show(keyIdx.length ? keyIdx[0] : -1);
-    if (!keyIdx.length) show(-1);
+    if (startIdx !== undefined && startIdx !== null) show(+startIdx);
+    else show(keyIdx.length ? keyIdx[0] : -1);
   }
 
   return () => {

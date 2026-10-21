@@ -10,7 +10,7 @@ import { askCoach, coachReady } from '../coach-ai.js';
 import { showCoach } from './coach-panel.js';
 import { startGame } from './game.js';
 
-export const tab = 'analysis';
+export const tab = 'profile';
 
 export function render(root, fenParam) {
   setTitle('Échiquier d’analyse', '#/analysis');

@@ -4,7 +4,7 @@ import { setTitle, esc, toast, confirmDialog } from '../ui.js';
 import { parsePgn } from '../chessutil.js';
 import { importGame } from './review.js';
 
-export const tab = 'analysis';
+export const tab = 'profile';
 
 const RESULT_FR = { win: 'Victoire', checkmated: 'Défaite (mat)', resigned: 'Défaite (abandon)', timeout: 'Défaite (temps)', abandoned: 'Défaite (abandon)', agreed: 'Nulle', repetition: 'Nulle', stalemate: 'Pat', insufficient: 'Nulle', '50move': 'Nulle', timevsinsufficient: 'Nulle' };
 const TIME_FR = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', daily: 'Par correspondance' };

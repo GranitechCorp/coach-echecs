@@ -19,7 +19,10 @@ et fait tourner **Stockfish 18 directement sur le téléphone** (gratuit, sans s
 | **Mes erreurs** | Chaque erreur de tes parties devient un exercice qui revient (1, 2, 4, 8 jours…) jusqu'à ce que tu le trouves à chaque fois. |
 | **Exercices** | Puzzles Lichess (en ligne) par thème : fourchette, clouage, mat en 2, finales… avec un classement qui s'adapte à toi. |
 | **Cours** | 19 leçons interactives en 5 modules : routine anti-gaffe, tactique, finales (mats de base, opposition, Lucena), stratégie, tes ouvertures. |
-| **Ouvertures** | 29 lignes commentées (Gambit Dame et ses défenses, Caro-Kann, Slave, réponses à 1…Cf6, Englund, Hollandaise, Londres…) en mode *Apprendre* ou *S'entraîner* avec répétition espacée. |
+| **Ouvertures** | 44 lignes commentées (Gambit Dame et ses défenses, Caro-Kann, Slave, réponses à 1…Cf6, Englund, Hollandaise, Londres…) en mode *Apprendre* ou *S'entraîner* avec répétition espacée. |
+| **Progrès (suivi chess.com)** | Synchronise automatiquement tes parties chess.com (compte *Granitech* par défaut), les analyse toutes avec Stockfish et calcule ton diagnostic : 8 compétences (ouverture, milieu, finales, vigilance, punir les erreurs, convertir un avantage, défense, gestion du temps), tes erreurs typiques (pièces en prise, fourchettes subies, occasions manquées, erreurs en finale ou par manque de temps…), tes résultats par ouverture et ton style de jeu. |
+| **Programme personnalisé** | Un plan de 7 jours construit à partir de tes erreurs : exercices sur tes thèmes faibles, leçons ciblées, ouvertures où tu perds des points, parties à ton niveau. Affiché chaque jour sur l'accueil. |
+| **Conseiller d'ouvertures** | Pour les Blancs, les Noirs contre 1.e4 et contre 1.d4 : l'ouverture la plus adaptée à ton style, ton niveau et tes résultats, avec les raisons et les lignes pour l'apprendre (Gambit Dame, Londres, Italienne, Caro-Kann, 1…e5, Scandinave, Slave, GDR). |
 | **Coach IA (facultatif)** | Avec une clé API Claude : explications rédigées, bilan complet de partie, questions libres sur une position. |
 
 Toutes les positions des cours et toutes les lignes d'ouverture sont **vérifiées par Stockfish** (`npm run check`).

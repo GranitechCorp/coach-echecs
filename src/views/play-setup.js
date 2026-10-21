@@ -13,10 +13,11 @@ const STARTS = [
   { id: 'slav', label: 'Ma Slave contre 1.d4 (1.d4 d5 2.c4 c6)', color: 'b', moves: 'd4 d5 c4 c6' },
 ];
 
-export function render(root) {
+export function render(root, presetElo) {
   setTitle('Nouvelle partie');
   const s = db();
-  const pref = s.lastSetup || { elo: 1000, color: 'w', start: 'std' };
+  const pref = { ...(s.lastSetup || { elo: 1000, color: 'w', start: 'std' }) };
+  if (presetElo) pref.elo = +presetElo;
   root.innerHTML = `
     <section class="card">
       <h2>Niveau de l’ordinateur</h2>

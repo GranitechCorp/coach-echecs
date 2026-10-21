@@ -15,17 +15,20 @@ import * as opening from './views/opening.js';
 import * as analysis from './views/analysis.js';
 import * as freeBoard from './views/free-board.js';
 import * as settings from './views/settings.js';
+import * as profile from './views/profile.js';
+import { autoSync } from './chesscom.js';
 
 const routes = [
   [/^#?\/?$/, home],
-  [/^#\/play$/, playSetup],
+  [/^#\/play(?:\/(\d+))?$/, playSetup],
   [/^#\/game$/, game],
-  [/^#\/review\/([\w-]+)$/, review],
-  [/^#\/puzzles(?:\/(\w+))?$/, puzzles],
+  [/^#\/review\/([\w-]+)(?:\/(\d+))?$/, review],
+  [/^#\/puzzles(?:\/(\w+))?(?:\/(\w+))?$/, puzzles],
   [/^#\/learn$/, learn],
   [/^#\/lesson\/([\w-]+)$/, lesson],
   [/^#\/opening\/([\w-]+)(?:\/(\w+))?$/, opening],
   [/^#\/analysis$/, analysis],
+  [/^#\/profile$/, profile],
   [/^#\/board(?:\/(.+))?$/, freeBoard],
   [/^#\/settings$/, settings],
 ];
@@ -58,6 +61,11 @@ load();
 touchStreak();
 window.addEventListener('hashchange', route);
 route();
+
+// synchro chess.com silencieuse au démarrage (au plus toutes les 6 h)
+autoSync().then((r) => {
+  if (r?.added) document.dispatchEvent(new CustomEvent('games-synced', { detail: r }));
+});
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

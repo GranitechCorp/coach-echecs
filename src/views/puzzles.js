@@ -8,23 +8,10 @@ import { stepFen, uciToSan, fig } from '../chessutil.js';
 
 export const tab = 'puzzles';
 
-export const THEMES = [
-  ['mix', 'Mélange'],
-  ['hangingPiece', 'Pièce en prise'],
-  ['fork', 'Fourchette'],
-  ['pin', 'Clouage'],
-  ['skewer', 'Enfilade'],
-  ['discoveredAttack', 'Découverte'],
-  ['mateIn1', 'Mat en 1'],
-  ['mateIn2', 'Mat en 2'],
-  ['backRankMate', 'Mat du couloir'],
-  ['deflection', 'Déviation'],
-  ['trappedPiece', 'Pièce piégée'],
-  ['opening', 'Ouverture'],
-  ['endgame', 'Finale'],
-  ['defensiveMove', 'Défense'],
-];
-const THEME_FR = Object.fromEntries(THEMES);
+import { THEMES, THEME_LABELS } from '../data/themes.js';
+
+export { THEMES };
+const THEME_FR = THEME_LABELS;
 
 function difficultyFor(rating) {
   // Lichess choisit la difficulté autour de 1500 pour un visiteur anonyme
@@ -65,7 +52,11 @@ function lessonPuzzles() {
   return out;
 }
 
-export function render(root, mode = 'tactics') {
+export function render(root, mode = 'tactics', presetTheme = null) {
+  if (mode === 'theme') {
+    if (presetTheme) update((d) => (d.lastTheme = presetTheme));
+    mode = 'tactics';
+  }
   setTitle('Exercices');
   const s = db();
   const due = s.mistakes.filter((m) => m.due <= Date.now());
@@ -183,7 +174,7 @@ export function render(root, mode = 'tactics') {
           }
           P.played++;
           if (win) P.solved++;
-          P.history.push({ date: new Date().toISOString(), kind: 'lichess', ok: win, rating: Math.round(P.rating) });
+          P.history.push({ date: new Date().toISOString(), kind: 'lichess', theme, ok: win, rating: Math.round(P.rating) });
           if (P.history.length > 2000) P.history.splice(0, P.history.length - 2000);
           for (const t of p.themes || []) {
             if (!THEME_FR[t]) continue;

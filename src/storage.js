@@ -10,7 +10,7 @@ const DEFAULTS = () => ({
     liveCoach: true,
     sound: true,
   },
-  profile: { startElo: 900, goalElo: 1600, chesscomUser: '' },
+  profile: { startElo: 900, goalElo: 1600, chesscomUser: 'Granitech', currentElo: null },
   games: [], // { id, date, pgn, white, black, result, source, botElo, userColor, review? }
   puzzles: { rating: 900, played: 0, solved: 0, history: [], themes: {} },
   mistakes: [], // positions ratées tirées de tes parties { id, fen, best, played, gameId, box, due }
@@ -45,10 +45,23 @@ function merge(base, saved) {
 }
 
 export function save() {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(state));
-  } catch (e) {
-    console.warn('Sauvegarde impossible', e);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+      return;
+    } catch (e) {
+      // stockage plein : on allège les plus anciennes analyses (on garde le résumé qui sert au diagnostic,
+      // le détail coup par coup sera recalculé si tu rouvres le bilan)
+      const heavy = state.games.filter((g) => g.review?.evals);
+      if (!heavy.length) {
+        console.warn('Sauvegarde impossible', e);
+        return;
+      }
+      for (const g of heavy.slice(0, Math.max(5, Math.ceil(heavy.length / 4)))) {
+        delete g.review.evals;
+        g.review.light = true;
+      }
+    }
   }
 }
 
