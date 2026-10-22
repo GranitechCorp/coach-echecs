@@ -3,11 +3,12 @@
 import { Chess } from 'chess.js';
 import { update, uid } from './storage.js';
 import { getAnalysisEngine } from './engine.js';
-import { parsePgn, uciOf, cpWhite, VALUE } from './chessutil.js';
-import { classifyMove, describeMove } from './explain.js';
+import { parsePgn, uciOf, cpWhite, winPct, safeChess, playUci, VALUE } from './chessutil.js';
+import { classifyMove, describeMove, isHanging } from './explain.js';
 import { OPENING_LINES, parseLine } from './data/openings.js';
 
-export const REVIEW_VERSION = 2;
+// v3 : analyse en multipv 2 (score de la 2e ligne), étiquettes brillant / fort / occasion manquée, Elo estimé
+export const REVIEW_VERSION = 3;
 
 /** Trouve la ligne de répertoire qui colle le plus longtemps à la partie. */
 export function matchOpening(sans) {
@@ -28,6 +29,273 @@ export function openingName(headers, match) {
 }
 
 export const cpOfEval = (e) => (e.over ? (e.over === 'w' ? 10000 : e.over === 'b' ? -10000 : 0) : cpWhite(e));
+
+// ─────────────── Étiquettes « façon chess.com » et Elo estimé ───────────────
+
+/** Chances de gain (0-100) de `color` dans la position évaluée par `e`. */
+const winFor = (e, color) => winPct(cpOfEval(e) * (color === 'w' ? 1 : -1));
+const secondWinFor = (e, color) => (e?.second ? winPct(cpWhite({ white: e.second }) * (color === 'w' ? 1 : -1)) : null);
+const mateFor = (e, color) => !!e && !e.over && e.white?.mate !== undefined && e.white.mate * (color === 'w' ? 1 : -1) > 0;
+
+/** Plateau léger (tableau de 64 cases) pour rejouer vite une variante : bien plus rapide que chess.js. */
+function lightBoard(fen) {
+  const rows = String(fen || '').split(' ')[0].split('/');
+  if (rows.length !== 8) return null;
+  const b = new Array(64).fill(null);
+  rows.forEach((row, k) => {
+    let f = 0;
+    for (const ch of row) {
+      if (/\d/.test(ch)) f += +ch;
+      else {
+        b[(7 - k) * 8 + f] = { t: ch.toLowerCase(), c: ch === ch.toLowerCase() ? 'b' : 'w' };
+        f++;
+      }
+    }
+  });
+  return b;
+}
+const sqIdx = (sq) => 'abcdefgh'.indexOf(sq[0]) + (+sq[1] - 1) * 8;
+const sqName = (i) => 'abcdefgh'[i % 8] + (Math.floor(i / 8) + 1);
+
+/** Joue un coup UCI sur le plateau léger (sans vérifier la légalité). Renvoie { color, captured, from, to } ou null. */
+function lightMove(b, uci) {
+  if (!uci || uci.length < 4) return null;
+  const from = sqIdx(uci.slice(0, 2));
+  const to = sqIdx(uci.slice(2, 4));
+  const p = b[from];
+  if (!p || from < 0 || to < 0) return null;
+  let captured = b[to]?.t || null;
+  if (p.t === 'p' && !b[to] && from % 8 !== to % 8) {
+    // prise en passant
+    const ep = (from - (from % 8)) + (to % 8);
+    captured = b[ep]?.t || null;
+    b[ep] = null;
+  }
+  if (p.t === 'k' && Math.abs((to % 8) - (from % 8)) === 2) {
+    // roque : la tour suit
+    const rank = from - (from % 8);
+    const [rf, rt] = to % 8 === 6 ? [rank + 7, rank + 5] : [rank, rank + 3];
+    b[rt] = b[rf];
+    b[rf] = null;
+  }
+  b[to] = uci[4] ? { t: uci[4], c: p.c } : p;
+  b[from] = null;
+  return { color: p.c, captured, from: sqName(from), to: sqName(to) };
+}
+
+function lightBalance(b, color) {
+  let t = 0;
+  for (const p of b) if (p && p.t !== 'k') t += (p.c === color ? 1 : -1) * VALUE[p.t];
+  return t;
+}
+
+/**
+ * Le coup `played` est-il un vrai sacrifice ? On suit la meilleure suite adverse (replyPv, 4 demi-coups max)
+ * et on regarde le matériel après chaque réponse du joueur : il doit avoir au moins 2 points de moins
+ * qu'avant son coup, et l'adversaire doit avoir pris une vraie pièce (cavalier ou plus) qui n'était pas
+ * déjà perdue avant le coup. Un échange ou une reprise immédiate ne comptent donc pas.
+ * À défaut, on regarde si le coup laisse une pièce en prise que l'adversaire a intérêt à ne pas prendre.
+ * Renvoie null ou { given: [{type, square}], deficit, plies, offered? }.
+ */
+export function sacrificeOf(fen, played, replyPv, color, fenAfter = null) {
+  const b = lightBoard(fen);
+  if (!b || !replyPv?.length) return null;
+  const b0 = lightBalance(b, color);
+  const origin = new Map(); // case actuelle d'une pièce du joueur → sa case avant le coup
+  const track = (mv) => {
+    origin.set(mv.to, origin.get(mv.from) ?? mv.from);
+    origin.delete(mv.from);
+  };
+  const first = lightMove(b, played);
+  if (!first || first.color !== color) return null;
+  track(first);
+  const given = [];
+  const candidates = [];
+  // pièces que le joueur déplace ensuite dans la variante : si elles tombent, c'est le sacrifice
+  // du coup suivant (jugé à son tour), pas de celui-ci
+  const later = new Set();
+  let ply = 0;
+  for (const u of replyPv.slice(0, 4)) {
+    const mv = lightMove(b, u);
+    if (!mv) break;
+    ply++;
+    if (mv.color === color) {
+      track(mv);
+      later.delete(mv.from);
+      later.add(mv.to);
+      // bilan après une réponse du joueur
+      const deficit = b0 - lightBalance(b, color);
+      if (deficit >= 2 && given.length) candidates.push({ deficit, given: [...given], plies: ply });
+    } else if (mv.captured && mv.captured !== 'p' && mv.captured !== 'k') {
+      given.push({ type: mv.captured, square: mv.to, from: origin.get(mv.to) ?? mv.to, later: later.has(mv.to) });
+      later.delete(mv.to);
+    }
+  }
+  const c = safeChess(fen);
+  if (!c) return null;
+  // une pièce déjà en prise avant le coup n'est pas « sacrifiée » : elle était perdue de toute façon
+  const hung = new Map();
+  const wasHanging = (sq) => {
+    if (!hung.has(sq)) hung.set(sq, isHanging(c, sq));
+    return hung.get(sq);
+  };
+  let best = null;
+  for (const cand of candidates) {
+    const notMine = (g) => g.later || wasHanging(g.from);
+    const real = cand.given.filter((g) => !notMine(g));
+    // ces pièces-là ne comptent pas non plus dans le déficit (sinon « pièce déjà en prise + échange
+    // des dames », ou un échange suivi d'un sacrifice au coup d'après, passeraient pour un sacrifice)
+    const lost = cand.given.filter(notMine).reduce((t, g) => t + VALUE[g.type], 0);
+    const deficit = cand.deficit - lost;
+    if (real.length && deficit >= 2 && (!best || deficit > best.deficit)) best = { given: real.map(({ type, square }) => ({ type, square })), deficit, plies: cand.plies };
+  }
+  return best || offeredPiece(c, played, color, wasHanging, fenAfter);
+}
+
+/**
+ * Pièce offerte que l'adversaire ne prend pas forcément (sacrifice « refusé ») : juste après le coup,
+ * une pièce du joueur (cavalier ou plus) qui n'était pas en prise peut être prise légalement, et la prendre
+ * coûterait au joueur au moins 2 points nets (même s'il reprend avec sa pièce la moins chère).
+ * `c` est la position avant le coup (elle est modifiée si fenAfter, la position après le coup, n'est pas fournie).
+ */
+function offeredPiece(c, played, color, wasHanging, fenAfter) {
+  const opp = color === 'w' ? 'b' : 'w';
+  const before = {};
+  for (const row of c.board()) for (const p of row) if (p && p.color === color && 'nbrq'.includes(p.type)) before[p.square] = wasHanging(p.square);
+  const b0 = lightBalance(lightBoard(c.fen()), color);
+  const first = { from: played.slice(0, 2), to: played.slice(2, 4) };
+  if (fenAfter) c = safeChess(fenAfter);
+  else if (!playUci(c, played)) return null;
+  if (!c) return null;
+  const balAfter = lightBalance(lightBoard(c.fen()), color);
+  let best = null;
+  for (const row of c.board()) {
+    for (const p of row) {
+      if (!p || p.color !== color || !'nbrq'.includes(p.type)) continue;
+      const from = p.square === first.to ? first.from : p.square;
+      if (before[from] || !c.attackers(p.square, opp).length || !isHanging(c, p.square)) continue;
+      // prises légales de cette pièce (un attaquant cloué ne compte pas)
+      const takers = c.attackers(p.square, opp).flatMap((sq) => c.moves({ square: sq, verbose: true }).filter((mv) => mv.to === p.square));
+      if (!takers.length) continue;
+      const cheapest = Math.min(...takers.map((mv) => VALUE[mv.piece]));
+      const defended = c.attackers(p.square, color).length > 0;
+      const deficit = b0 - (balAfter - VALUE[p.type] + (defended && cheapest < 100 ? cheapest : 0));
+      if (deficit >= 2 && (!best || deficit > best.deficit)) best = { given: [{ type: p.type, square: p.square }], deficit, plies: 0, offered: true };
+    }
+  }
+  return best;
+}
+
+/**
+ * Étiquettes superposées aux classes (sans les modifier) pour chaque coup i :
+ * 'brilliant' (!! sacrifice juste), 'great' (! seul bon coup), 'miss' (✗ erreur adverse non punie) ou null.
+ * Fonction pure : marche aussi pour les anciens bilans (sans `second`, il n'y a simplement pas de « coup fort »).
+ */
+export function computeTags(fens, moves, evals, classes) {
+  return moves.map((m, i) => {
+    const e0 = evals[i];
+    const e1 = evals[i + 1];
+    if (!e0 || !e1 || e0.over) return null;
+    const color = m.color;
+    const played = uciOf(m);
+    const before = winFor(e0, color);
+    const after = winFor(e1, color);
+    const loss = Math.max(0, before - after);
+    const isBest = e0.pv?.[0] === played;
+    const cls = classes?.[i];
+
+    // ✗ occasion manquée : l'adversaire vient de se tromper et le coup ne le punit pas
+    // (si le coup joué est celui du moteur, la « perte » n'est qu'un artefact d'analyse)
+    if (i > 0 && ['mistake', 'blunder'].includes(classes?.[i - 1]) && loss >= 10 && !isBest) return 'miss';
+    if (cls === 'book' || e1.over) return null;
+
+    // !! coup brillant : meilleur coup (ou presque) qui sacrifie une pièce, sans compromettre la position
+    if ((isBest || loss <= 2) && after >= 50) {
+      const sac = sacrificeOf(fens[i], played, e1.pv, color, fens[i + 1]);
+      if (sac) {
+        if (before < 97) return 'brilliant';
+        // déjà totalement gagnant : seulement si le sacrifice mate ou rapporte nettement plus que la 2e option
+        const sign = color === 'w' ? 1 : -1;
+        const gap = e0.second ? (cpOfEval(e1) - cpWhite({ white: e0.second })) * sign : 0;
+        if (mateFor(e1, color) || gap >= 300) return 'brilliant';
+      }
+    }
+
+    // ! coup fort : le seul bon coup, la 2e option fait perdre beaucoup
+    if (isBest && e0.second && before < 95) {
+      const second = secondWinFor(e0, color);
+      const prev = moves[i - 1];
+      const recapture = prev?.captured && prev.to === m.to;
+      // prise « naturelle » (échange ou pièce plus chère) : pas besoin d'être fort pour la voir
+      const naturalCapture = m.captured && VALUE[m.captured] >= VALUE[m.piece];
+      if (before - second >= 15 && !recapture && !naturalCapture) {
+        const legal = safeChess(fens[i])?.moves().length ?? 0;
+        if (legal > 2) return 'great';
+      }
+    }
+    return null;
+  });
+}
+
+/** Elo correspondant à une perte moyenne en centipions (formule type « Game Rating »), arrondi à 25. */
+export const eloFromAcpl = (acpl) => Math.round(Math.max(300, Math.min(2800, Math.round(3100 * Math.exp(-0.0116 * acpl)))) / 25) * 25;
+
+/**
+ * Elo estimé de la partie pour chaque camp, à partir de la perte moyenne par coup (ACPL) :
+ * chaque perte est plafonnée à 400 cp, les mats (et les évaluations énormes) ramenés à ±1000 cp.
+ * Renvoie { w, b, acpl: {w, b} } (null si le camp a joué moins de 5 coups). Toujours indicatif.
+ */
+export function computeGameElo(moves, evals) {
+  const clamp = (v) => Math.max(-1000, Math.min(1000, v));
+  const losses = { w: [], b: [] };
+  moves.forEach((m, i) => {
+    if (!evals[i] || !evals[i + 1]) return;
+    const sign = m.color === 'w' ? 1 : -1;
+    const loss = (clamp(cpOfEval(evals[i])) - clamp(cpOfEval(evals[i + 1]))) * sign;
+    losses[m.color].push(Math.min(400, Math.max(0, loss)));
+  });
+  const acpl = (a) => (a.length >= 5 ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
+  const a = { w: acpl(losses.w), b: acpl(losses.b) };
+  return { w: a.w === null ? null : eloFromAcpl(a.w), b: a.b === null ? null : eloFromAcpl(a.b), acpl: a };
+}
+
+/** Ajoute étiquettes et Elo estimé à un bilan qui n'en a pas encore (anciens bilans). Renvoie vrai si modifié. */
+export function ensureReviewExtras(review, fens, moves) {
+  if (!review?.evals || review.evals.length !== moves.length + 1) return false;
+  let changed = false;
+  if (!Array.isArray(review.tags) || review.tags.length !== moves.length) {
+    review.tags = computeTags(fens, moves, review.evals, review.classes);
+    changed = true;
+  }
+  if (!review.elo) {
+    const est = computeGameElo(moves, review.evals);
+    review.elo = { w: est.w, b: est.b };
+    review.acpl = est.acpl;
+    changed = true;
+  }
+  return changed;
+}
+
+/**
+ * Effet d'horizon du moteur : quand le camp au trait joue exactement le coup prévu par le moteur et que la
+ * position suivante révèle un mat contre lui, ce mat existait déjà avant sa réponse (le moteur, à faible
+ * profondeur, ne l'avait pas vu). On recopie ce mat d'un demi-coup en arrière, sinon le coup qui lance la
+ * combinaison passe pour une gaffe (partie de l'Opéra : 15.Fxd7+ Cxd7 16.Db8+ !! Cxb8 17.Td8#).
+ * Modifie `evals` sur place ; renvoie le nombre de positions corrigées.
+ */
+export function fixMateHorizon(moves, evals) {
+  let fixed = 0;
+  for (let k = moves.length - 1; k >= 1; k--) {
+    const e = evals[k];
+    const next = evals[k + 1];
+    if (!e || !next || e.over || next.over || e.white?.mate !== undefined || !next.white?.mate) continue;
+    const mated = next.white.mate > 0 ? 'b' : 'w';
+    if (moves[k].color !== mated || e.pv?.[0] !== uciOf(moves[k])) continue;
+    evals[k] = { ...e, pv: [e.pv[0], ...(next.pv || [])].slice(0, 6), white: { mate: next.white.mate } };
+    fixed++;
+  }
+  return fixed;
+}
 
 /** Score de la partie pour l'utilisateur (1, 0.5, 0). */
 export function userScore(game, headers) {
@@ -53,12 +321,16 @@ export async function analyzeGame(game, { depth = 12, onProgress, isAlive = () =
     if (c.isGameOver()) {
       evals.push({ pv: [], white: c.isCheckmate() ? { mate: 0 } : { cp: 0 }, over: c.isCheckmate() ? (c.turn() === 'w' ? 'b' : 'w') : 'draw' });
     } else {
-      const r = await engine.search(fens[i], { depth });
+      // 2 lignes : la 2e sert à repérer les « seuls bons coups » (on ne garde que son score)
+      const r = await engine.search(fens[i], { depth, multipv: 2 });
       const l = r.lines[0];
-      evals.push({ pv: (l?.pv || [r.bestmove]).slice(0, 6), white: l?.white || { cp: 0 } });
+      const e = { pv: (l?.pv || [r.bestmove]).slice(0, 6), white: l?.white || { cp: 0 } };
+      if (r.lines[1]?.white) e.second = { ...r.lines[1].white };
+      evals.push(e);
     }
     onProgress?.(i + 1, fens.length);
   }
+  fixMateHorizon(moves, evals);
   const sans = moves.map((m) => m.san);
   const match = matchOpening(sans);
   const classes = [];
@@ -73,6 +345,7 @@ export async function analyzeGame(game, { depth = 12, onProgress, isAlive = () =
     counts[m.color][cls] = (counts[m.color][cls] || 0) + 1;
   });
   const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 100);
+  const est = computeGameElo(moves, evals);
   const review = {
     v: REVIEW_VERSION,
     n: moves.length,
@@ -81,6 +354,9 @@ export async function analyzeGame(game, { depth = 12, onProgress, isAlive = () =
     classes,
     counts,
     accuracy: { w: avg(acc.w), b: avg(acc.b) },
+    tags: computeTags(fens, moves, evals, classes),
+    elo: { w: est.w, b: est.b },
+    acpl: est.acpl,
     opening: openingName(headers, match),
     bookLen: match.len,
   };
@@ -219,6 +495,20 @@ export function deriveGame(game, parsed, review) {
   });
   if (out.maxAdv === -99999) out.maxAdv = 0;
   if (out.minAdv === 99999) out.minAdv = 0;
+
+  // coups brillants / forts / occasions manquées du joueur et Elo estimé de la partie
+  const tags = Array.isArray(review.tags) && review.tags.length === moves.length ? review.tags : computeTags(fens, moves, ev, review.classes);
+  out.brilliantIdx = [];
+  out.greatIdx = [];
+  out.missIdx = [];
+  tags.forEach((t, i) => {
+    if (!t || moves[i].color !== me) return;
+    out[{ brilliant: 'brilliantIdx', great: 'greatIdx', miss: 'missIdx' }[t]]?.push(i);
+  });
+  out.brilliants = out.brilliantIdx.length;
+  out.greats = out.greatIdx.length;
+  out.misses = out.missIdx.length;
+  out.estElo = (review.elo || computeGameElo(moves, ev))[me] ?? null;
   return out;
 }
 
@@ -228,6 +518,8 @@ export function ensureDerived(game) {
   if (game.review.derived?.v === REVIEW_VERSION) return game.review.derived;
   const parsed = parsePgn(game.pgn);
   if (!parsed) return null;
+  // anciens bilans : on ajoute les étiquettes et l'Elo estimé (calculés sans moteur)
+  ensureReviewExtras(game.review, [parsed.startFen, ...parsed.moves.map((m) => m.after)], parsed.moves);
   game.review.derived = deriveGame(game, parsed, game.review);
   return game.review.derived;
 }

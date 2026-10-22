@@ -1,1 +1,152 @@
-/* Styles du module vision */
+/* Styles du module vision (et de l’aide « nom de la case » sur tous les échiquiers) */
+
+/* ─── Aide « nom de la case » (board.js) ─── */
+.sq-name {
+  position: absolute; z-index: 25; left: 0; top: 0;
+  transform: translate(-50%, -100%);
+  padding: 2px 8px; border-radius: 7px;
+  background: rgba(16, 16, 14, 0.85); color: #fff; box-shadow: 0 1px 4px #0007;
+  font: 700 14px/1.35 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  pointer-events: none; white-space: nowrap; opacity: 0; transition: opacity 0.25s;
+}
+.sq-name.below { transform: translate(-50%, 0); }
+.sq-name.on { opacity: 1; transition: opacity 0.05s; }
+
+/* coordonnées écrites dans chaque case (réglage « coordsOnSquares ») */
+/* au-dessus des pièces (sinon la tour ou la dame cachent « a8 », « d8 »…), petites et dans le coin */
+.cg-wrap coords.squares { z-index: 3; text-transform: lowercase; font-size: 9px; font-weight: 700; opacity: 0.9; }
+.cg-wrap coords.squares coord { padding: 1px 3px; }
+
+/* ─── Accueil Vision ─── */
+.v-hero { background: linear-gradient(135deg, #24323b, #262421); }
+.v-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0 4px; text-align: center; }
+.v-kpis > div { background: var(--bg2); border-radius: 10px; padding: 8px 4px; }
+.v-kpis b { display: block; font-size: 1.15rem; color: var(--accent); }
+.v-kpis b::first-letter { text-transform: uppercase; }
+.v-kpis small { color: var(--muted); font-size: 0.72rem; line-height: 1.2; display: block; }
+#v-chart .chart { margin-top: 4px; }
+.v-daily { border: 1px solid var(--accent); }
+.v-daily.done { border-color: var(--line); }
+.v-section { margin: 16px 2px 0; font-size: 1rem; }
+.v-mode { display: flex; gap: 12px; align-items: center; }
+.v-mode-icon { font-size: 1.6rem; width: 2rem; text-align: center; flex: none; color: var(--accent); }
+.v-mode-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.v-mode-body small { line-height: 1.3; }
+.v-rec { color: var(--accent); font-size: 0.78rem; }
+.v-go { color: var(--muted); font-size: 1.6rem; flex: none; }
+.v-method ul { padding-left: 18px; }
+.v-method li { margin: 5px 0; }
+.v-method h2 { margin-top: 12px; }
+
+/* ─── Réglages d’un exercice ─── */
+.v-opt-label { margin: 10px 0 0; }
+.v-seg { margin-top: 4px; }
+.v-seg > button { white-space: normal; line-height: 1.2; font-size: 0.86rem; }
+.v-rec-line { margin-top: 2px; }
+.v-memo-list { padding-left: 18px; }
+.v-memo-list li { margin: 4px 0; }
+
+/* ─── En-tête des exercices ─── */
+.v-head { margin: 0 0 4px; }
+.v-timer { height: 6px; background: var(--bg2); border-radius: 3px; overflow: hidden; }
+.v-timer > div { height: 100%; width: 100%; background: var(--accent); transition: width 0.1s linear; }
+.v-timer > div.low { background: var(--danger); }
+.v-stats { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 6px 0 2px; font-size: 0.92rem; color: var(--muted); }
+.v-stats b { color: var(--text); font-variant-numeric: tabular-nums; }
+.v-err-count { color: var(--c-mistake); }
+.v-prompt { display: flex; align-items: baseline; justify-content: center; gap: 12px; min-height: 52px; }
+.v-target { font-size: 2.5rem; font-weight: 800; line-height: 1.2; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.v-next { color: var(--muted); font-size: 1rem; }
+.v-target.ok, .v-score.ok { animation: v-good 0.35s ease-out; }
+.v-target.ko { color: var(--danger); animation: v-shake 0.3s; }
+.v-name-ko { font-size: 1.4rem; }
+@keyframes v-good { from { color: var(--accent); transform: scale(1.15); } to { transform: scale(1); } }
+@keyframes v-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.v-daily-step { margin: 0 0 4px; text-align: center; }
+
+/* ─── Échiquier d’exercice ─── */
+.vision .board-row { margin: 6px auto 0; }
+.v-board { touch-action: none; }
+.v-strip { margin: 0 auto 6px; max-width: min(100%, 72vh); text-align: center; font-size: 0.74rem; font-weight: 700; padding: 3px; border-radius: 0 0 6px 6px; letter-spacing: 0.02em; }
+.v-strip:empty { display: none; }
+.v-strip.white { background: #ecebe8; color: #222; }
+.v-strip.black { background: #0e0e0d; color: #ddd; border: 1px solid var(--line); border-top: 0; }
+cg-board square.v-ok { background: rgba(129, 182, 76, 0.85); }
+cg-board square.v-ko { background: rgba(226, 72, 72, 0.88); }
+cg-board square.v-good { background: rgba(129, 182, 76, 0.95); box-shadow: inset 0 0 0 3px #fff; }
+cg-board square.v-lit { background: rgba(70, 140, 220, 0.92); box-shadow: inset 0 0 0 3px #fff; animation: v-pulse 0.9s ease-in-out infinite alternate; }
+cg-board square.v-goal { background: radial-gradient(circle, rgba(247, 198, 49, 1) 0 28%, rgba(247, 198, 49, 0.4) 30% 100%); box-shadow: inset 0 0 0 2px rgba(247, 198, 49, 1); }
+@keyframes v-pulse { from { opacity: 0.6; } to { opacity: 1; } }
+
+/* ─── Réponses ─── */
+.v-answer { margin: 4px 0; }
+.v-keys { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 6px 0; }
+.v-keys .btn { min-height: 44px; padding: 0; font-size: 1.15rem; min-width: 0; }
+.v-keys .btn.on { border-color: var(--accent); background: #2f3a26; color: var(--accent); }
+.v-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.v-choices .btn { font-size: 1.25rem; min-height: 50px; }
+.vision .btn.right { background: var(--accent2); border-color: var(--accent); color: #fff; }
+.vision .btn.wrong { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* Clair ou foncé */
+.v-color .v-prompt { min-height: 120px; align-items: center; }
+.v-color .v-target { font-size: 4.2rem; }
+.v-color-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.v-col { border-radius: 14px; min-height: 130px; font: inherit; font-weight: 700; font-size: 1.15rem; border: 2px solid var(--line); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+.v-col:active { transform: scale(0.97); }
+.v-col i { width: 46px; height: 46px; border-radius: 6px; border: 2px solid #0003; }
+.v-col.light { background: #f0d9b5; color: #3a2a1a; }
+.v-col.light i { background: #f0d9b5; box-shadow: 0 0 0 3px #fff8; }
+.v-col.dark { background: #b58863; color: #fff; }
+.v-col.dark i { background: #b58863; box-shadow: 0 0 0 3px #0003; }
+.v-color-fb { min-height: 54px; }
+
+/* Notation */
+.v-nprompt { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 64px; }
+.v-trait { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 0.85rem; }
+.v-ask { font-weight: 700; font-size: 1.05rem; display: inline-flex; align-items: baseline; gap: 8px; }
+.v-nprompt .v-target { font-size: 2.1rem; }
+.v-memo summary { cursor: pointer; font-weight: 600; }
+
+/* Cavalier */
+.v-kprompt { text-align: center; min-height: 48px; }
+.v-kprompt p { margin: 4px 0; }
+.v-path { text-align: center; min-height: 20px; }
+
+/* Visualisation */
+.v-moves-label { margin: 6px 0 2px; }
+.v-moves { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 1.15rem; font-weight: 700; line-height: 1.5; word-spacing: 0.15em; }
+.v-bq { min-height: 52px; text-align: center; }
+.v-bq p { margin: 6px 0 0; }
+.v-bq .v-ask { display: block; }
+.v-pieces { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.v-pieces .btn { padding: 2px; min-height: 48px; min-width: 0; }
+.v-pc { position: relative; display: block; width: 36px; height: 36px; box-sizing: border-box; }
+.v-pieces .v-pc piece { position: absolute; inset: 0; width: 100%; height: 100%; transform: none; }
+.v-empty { margin-top: 6px; }
+
+/* ─── Résultats ─── */
+.v-result { text-align: center; }
+.v-res-score { font-size: 3.4rem; font-weight: 800; color: var(--accent); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.v-record { color: var(--c-inaccuracy); font-weight: 700; }
+.v-grow { flex: 1; }
+.v-steps { padding-left: 22px; }
+.v-steps li { margin: 4px 0; }
+.v-daily-res { list-style: none; padding: 0; margin: 10px 0; text-align: left; }
+.v-daily-res li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.v-link { color: var(--accent); text-decoration: underline; }
+
+/* mini-échiquier (cases ratées, cases difficiles) */
+.v-mini { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); width: min(100%, 272px); aspect-ratio: 1; margin: 8px auto; border-radius: 4px; overflow: hidden; }
+.v-mini span { min-width: 0; min-height: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; font-size: 0.74rem; font-weight: 800; }
+.v-mini .l { background: #f0d9b5; color: #6b4a2b; }
+.v-mini .d { background: #b58863; color: #fff; }
+.v-mini .m-ko, .v-mini .m-weak3 { background: #d64a3a; color: #fff; }
+.v-mini .m-weak2 { background: #e8833f; color: #fff; }
+.v-mini .m-weak1 { background: #e9b949; color: #3a2a1a; }
+.v-mini i { position: absolute; font-style: normal; font-size: 0.55rem; font-weight: 700; opacity: 0.75; }
+.v-mini i.rk { left: 2px; top: 1px; }
+.v-mini i.fl { right: 2px; bottom: 0; }
+
+/* touches rapides pendant une manche chronométrée : pas de zoom au double toucher */
+.vision button, .vision .btn { touch-action: manipulation; }

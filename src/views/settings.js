@@ -29,6 +29,14 @@ export function render(root) {
       <button class="btn" id="save-profile">Enregistrer</button>
     </section>
     <section class="card">
+      <h2>Repérage sur l’échiquier</h2>
+      <label class="switch"><input type="checkbox" id="sq-names" ${s.settings.squareNames !== false ? 'checked' : ''}/> Afficher le nom de la case que je touche</label>
+      <p class="small muted">Sur tous les échiquiers, une petite étiquette (« e4 ») apparaît une seconde au-dessus de la case touchée.</p>
+      <label class="switch"><input type="checkbox" id="sq-coords" ${s.settings.coordsOnSquares === true ? 'checked' : ''}/> Écrire les coordonnées dans toutes les cases</label>
+      <p class="small muted">Pratique au début pour lire les coups. Désactive-le dès que tu te sens prêt : le but est de t’en passer.</p>
+      <a class="btn block" href="#/vision">👁 S’entraîner à repérer les cases</a>
+    </section>
+    <section class="card">
       <h2>Sauvegarde</h2>
       <p class="small muted">Tes données (parties, progrès, erreurs) sont stockées uniquement sur ce téléphone. Exporte-les de temps en temps.</p>
       <div class="row wrap">
@@ -45,6 +53,14 @@ export function render(root) {
   root.querySelector('#ai-on').onchange = (e) => {
     update((d) => (d.settings.aiEnabled = e.target.checked));
     toast(e.target.checked ? 'Coach IA activé' : 'Mode 100 % local');
+  };
+  root.querySelector('#sq-names').onchange = (e) => {
+    update((d) => (d.settings.squareNames = e.target.checked));
+    toast(e.target.checked ? 'Nom de la case affiché au toucher ✓' : 'Nom de la case masqué');
+  };
+  root.querySelector('#sq-coords').onchange = (e) => {
+    update((d) => (d.settings.coordsOnSquares = e.target.checked));
+    toast(e.target.checked ? 'Coordonnées dans toutes les cases ✓' : 'Coordonnées seulement sur les bords');
   };
   root.querySelector('#save-key').onclick = () => {
     update((d) => {

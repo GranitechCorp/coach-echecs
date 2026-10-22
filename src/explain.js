@@ -259,7 +259,7 @@ export function pvMaterialSwing(fen, pv, color, plies = 6) {
 
 export const CLASSES = {
   best: { label: 'Meilleur coup', plural: 'Meilleurs coups', sym: '★', css: 'best' },
-  excellent: { label: 'Excellent', plural: 'Excellents', sym: '!', css: 'excellent' },
+  excellent: { label: 'Excellent', plural: 'Excellents', sym: '👍', css: 'excellent' }, // « ! » est réservé aux coups forts
   good: { label: 'Bon coup', plural: 'Bons coups', sym: '✓', css: 'good' },
   book: { label: 'Théorie', plural: 'Coups de théorie', sym: '📖', css: 'book' },
   inaccuracy: { label: 'Imprécision', plural: 'Imprécisions', sym: '?!', css: 'inaccuracy' },
@@ -324,7 +324,7 @@ export function explainBest(fen, lines) {
  * Explique une erreur : ce que le coup joué permet à l'adversaire, et ce qu'il fallait faire.
  * linesBefore : analyse de `fen` ; linesAfter : analyse de la position après le coup joué.
  */
-export function explainMistake(fen, playedUci, linesBefore, linesAfter) {
+export function explainMistake(fen, playedUci, linesBefore, linesAfter, { withBest = true } = {}) {
   const c = safeChess(fen);
   const color = c.turn();
   const played = describeMove(fen, playedUci);
@@ -352,7 +352,7 @@ export function explainMistake(fen, playedUci, linesBefore, linesAfter) {
       else if (reply.pv.length > 1) out.push(`Variante : ${pvToSan(afterFen, reply.pv, 6)}.`);
     }
   }
-  if (best && best.pv[0] !== playedUci) {
+  if (withBest && best && best.pv[0] !== playedUci) {
     const b = describeMove(fen, best.pv[0]);
     out.push(`**Il fallait jouer ${fig(b.san)}** (${evalText(best)}).`);
     if (b.facts.length) out.push(...b.facts.slice(0, 3).map((f) => '• ' + f));
@@ -367,4 +367,132 @@ export function adviceFor(tags) {
   if (tags.has('clouage')) return 'Quand ta pièce est alignée avec ton roi ou ta dame, méfie-toi des clouages.';
   if (tags.has('mat')) return 'Avant chaque coup, vérifie les échecs que ton adversaire peut donner : ÉCHECS, CAPTURES, MENACES.';
   return 'Routine à chaque coup : quels sont les échecs, captures et menaces possibles — pour moi ET pour mon adversaire ?';
+}
+
+// ─────────────── Coups brillants, coups forts, occasions manquées ───────────────
+
+/** Étiquettes superposées aux classes (calculées par computeTags dans analyzer.js). */
+export const TAGS = {
+  brilliant: { label: 'Coup brillant', plural: 'Coups brillants', sym: '!!', css: 'brilliant' },
+  great: { label: 'Coup fort', plural: 'Coups forts', sym: '!', css: 'great' },
+  miss: { label: 'Occasion manquée', plural: 'Occasions manquées', sym: '✗', css: 'miss' },
+};
+
+/** « 1 coup brillant », « 3 occasions manquées » */
+export const tagCount = (tag, n) => `${n} ${(n > 1 ? TAGS[tag].plural : TAGS[tag].label).toLowerCase()}`;
+
+const otherColor = (c) => (c === 'w' ? 'b' : 'w');
+const possessive = (t, mine) => (mine ? (t === 'r' || t === 'q' ? 'ta ' : 'ton ') : t === 'r' || t === 'q' ? 'sa ' : 'son ') + NAME[t];
+const listFr = (a) => (a.length <= 1 ? a.join('') : `${a.slice(0, -1).join(', ')} et ${a.at(-1)}`);
+const pct = (v) => `${Math.round(v)}\u00a0%`; // espace insécable : « 53 % » ne se coupe pas
+const winOf = (white, color) => winPct(cpWhite({ white }) * (color === 'w' ? 1 : -1));
+/** Chances de gain d'après une évaluation du bilan (gère les fins de partie : mat déjà donné, nulle). */
+const winOfEval = (e, color) => (e?.over ? (e.over === 'draw' ? 50 : e.over === color ? 100 : 0) : winOf(e?.white || { cp: 0 }, color));
+const isMateFor = (white, color) => white?.mate !== undefined && white.mate !== 0 && (white.mate > 0) === (color === 'w');
+
+function fenAfter(fen, uci) {
+  const c = safeChess(fen);
+  return c && playUci(c, uci) ? c.fen() : fen;
+}
+
+/**
+ * « Pourquoi c'est brillant » : ce qui est sacrifié et ce que ça rapporte.
+ * e0 / e1 : évaluations (format du bilan) avant et après le coup ; sac : résultat de sacrificeOf ;
+ * mine : coup du joueur (sinon de son adversaire).
+ */
+export function explainBrilliant(fen, playedUci, e0, e1, sac, mine = true) {
+  const c = safeChess(fen);
+  if (!c) return [];
+  const color = c.turn();
+  const d = describeMove(fen, playedUci);
+  const line = [playedUci, ...(e1?.pv || [])];
+  const out = ['#### Pourquoi c’est brillant'];
+  const n = sac?.deficit || 0;
+  const pts = (k) => `${k} point${k > 1 ? 's' : ''} de matériel`;
+  if (sac?.offered) {
+    const g = sac.given[0];
+    out.push(`**${fig(d.san)} est un sacrifice** : ${mine ? 'tu laisses' : 'ton adversaire laisse'} ${possessive(g.type, mine)} en ${g.square} à la merci de ${mine ? 'ton adversaire' : 'tes pièces'}${n ? ` (${mine ? 's’il accepte, tu as' : 'si tu acceptes, il a'} ${pts(n)} en moins)` : ''}.`);
+  } else {
+    const given = (sac?.given || []).map((g) => possessive(g.type, mine));
+    out.push(`**${fig(d.san)} est un sacrifice** : ${mine ? 'tu donnes' : 'ton adversaire donne'} ${listFr(given) || 'du matériel'}${n ? ` (au bilan, ${pts(n)} en moins)` : ''}.`);
+  }
+  // « Attention : … en prise » décrit le sacrifice lui-même : inutile (et trompeur) de le répéter ici
+  const facts = d.facts.filter((f) => !/^(Attention|Laisse)/.test(f));
+  if (facts.length) out.push(...facts.slice(0, 3).map((f) => '• ' + f));
+  if (isMateFor(e1?.white, color)) {
+    out.push(`Et ça force le **mat en ${Math.abs(e1.white.mate) + 1}** : ${pvToSan(fen, line, 12)}.`);
+  } else {
+    if (sac?.offered && e1?.pv?.length) out.push(`Prendre ${theName(sac.given[0].type)} serait une erreur : la meilleure réponse est ${fig(uciToSan(fenAfter(fen, playedUci), e1.pv[0]))}. Suite probable : ${pvToSan(fen, line, 7)}.`);
+    else if (e1?.pv?.length) out.push(`Suite probable : ${pvToSan(fen, line, 7)}.`);
+    const swing = pvMaterialSwing(fen, line, color, 7);
+    const chances = `${mine ? 'tes' : 'ses'} chances de gain : ${pct(winOfEval(e1, color))}`;
+    if (swing >= 0 && sac?.offered) out.push(`Le cadeau est refusé et le matériel ne baisse pas${swing >= 2 ? ` (au bout de la suite, environ ${pts(swing)} de plus)` : ''} : la position reste favorable (${chances}).`);
+    else if (swing >= 0) out.push(`Le matériel est récupéré quelques coups plus tard${swing >= 2 ? `, avec un bénéfice d’environ ${pts(swing)}` : ''} : c’est une combinaison.`);
+    else out.push(`Même avec moins de matériel, la position reste favorable (${chances}) : l’activité des pièces et l’attaque valent plus que le matériel donné.`);
+  }
+  if (e0?.second && !isMateFor(e0.second, color)) {
+    const w2 = winOf(e0.second, color);
+    if (winOfEval(e0, color) - w2 >= 5) out.push(`Les autres coups faisaient moins bien : le 2e meilleur ne laissait que ${pct(w2)} de chances de gain${mine ? '' : ' à ton adversaire'}.`);
+  }
+  out.push(mine ? '*Un sacrifice, ça se calcule : cherche d’abord les coups forcés (échecs, captures, menaces) et vérifie la suite jusqu’au bout.*' : '*Retiens l’idée : quand un roi est mal protégé, un sacrifice peut ouvrir les lignes vers lui.*');
+  return out;
+}
+
+/** « Le seul bon coup » : ce que donnait la 2e meilleure option. */
+export function explainGreat(fen, playedUci, e0, mine = true) {
+  const c = safeChess(fen);
+  if (!c) return [];
+  const color = c.turn();
+  const d = describeMove(fen, playedUci);
+  const wBest = winOfEval(e0, color);
+  const out = ['#### Le seul bon coup'];
+  const goal = wBest >= 60 ? 'garder l’avantage' : wBest >= 40 ? 'garder l’équilibre' : 'rester dans la partie';
+  out.push(`**${fig(d.san)}** était le seul coup pour ${goal} : ${mine ? 'tu gardes' : 'ton adversaire garde'} ${pct(wBest)} de chances de gain.`);
+  if (e0.second) {
+    const pov = mine ? color : otherColor(color); // les phrases d'évaluation parlent toujours au joueur
+    out.push(`Le 2e meilleur coup les faisait tomber à ${pct(winOf(e0.second, color))} (${evalPhrase({ white: e0.second }, pov)}) : ${mine ? 'tu as' : 'ton adversaire a'} trouvé le bon chemin.`);
+  }
+  const facts = d.facts.filter((f) => !/^(Attention|Laisse)/.test(f)); // le coup est le bon : pas d'alerte « en prise »
+  if (facts.length) out.push(...facts.slice(0, 3).map((f) => '• ' + f));
+  if (e0.pv?.length > 1 && e0.pv[0] === playedUci) out.push(`Suite probable : ${pvToSan(fen, e0.pv, 7)}.`);
+  return out;
+}
+
+/** Une autre option (calculée à la demande) pour montrer ce que donnait un coup « normal ». */
+export function explainAlternative(fen, line) {
+  const c = safeChess(fen);
+  if (!c || !line?.pv?.length) return [];
+  const san = uciToSan(fen, line.pv[0]);
+  return [`Par exemple, **${fig(san)}** ne laissait que ${pct(winOf(line.white, c.turn()))} de chances de gain : ${pvToSan(fen, line.pv, 6)}.`];
+}
+
+/**
+ * Occasion manquée : ce que l'adversaire venait de laisser et ce qu'il fallait jouer.
+ * prev : { san, cls, num } du coup adverse précédent ; e0 / e1 : évaluations avant / après le coup joué.
+ */
+export function explainMiss(fen, playedUci, prev, e0, e1, mine = true) {
+  const c = safeChess(fen);
+  if (!c) return [];
+  const color = c.turn();
+  const out = ['#### Occasion manquée'];
+  const fault = prev?.cls === 'blunder' ? 'une gaffe' : 'une erreur';
+  const prevTxt = prev?.san ? ` avec **${prev.num || ''}${fig(prev.san)}**` : '';
+  out.push(mine
+    ? `Ton adversaire venait de faire ${fault}${prevTxt} : c’était le moment d’en profiter, et ${fig(uciToSan(fen, playedUci))} laisse passer l’occasion.`
+    : `Tu venais de faire ${fault}${prevTxt}, et ton adversaire ne l’a pas punie avec ${fig(uciToSan(fen, playedUci))}.`);
+  const bestUci = e0?.pv?.[0];
+  if (bestUci && bestUci !== playedUci) {
+    const b = describeMove(fen, bestUci);
+    out.push(`**Il fallait jouer ${fig(b.san)}** (${mine ? 'tes' : 'ses'} chances de gain : ${pct(winOfEval(e0, color))}).`);
+    if (b.facts.length) out.push(...b.facts.slice(0, 3).map((f) => '• ' + f));
+    if (isMateFor(e0.white, color)) out.push(`Il y avait un **mat en ${Math.abs(e0.white.mate)}** : ${pvToSan(fen, e0.pv, 12)}.`);
+    else {
+      const swing = pvMaterialSwing(fen, e0.pv, color);
+      if (e0.pv.length > 1) out.push(`Suite probable : ${pvToSan(fen, e0.pv, 6)}.`);
+      if (swing >= 2) out.push(`Au bout, ${mine ? 'tu gagnais' : 'ton adversaire gagnait'} environ ${swing} points de matériel.`);
+    }
+  }
+  if (e0 && e1) out.push(`Avec le coup joué, ${mine ? 'tes' : 'ses'} chances de gain passent de ${pct(winOfEval(e0, color))} à ${pct(winOfEval(e1, color))}.`);
+  if (mine) out.push('*Réflexe : après chaque coup adverse, demande-toi « qu’est-ce qu’il vient de laisser ? » — échecs, captures, menaces.*');
+  return out;
 }

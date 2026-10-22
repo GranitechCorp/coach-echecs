@@ -146,13 +146,57 @@ export function computeInsights(allGames) {
     }))
     .sort((a, b) => b.n - a.n);
 
+  // ── niveau de jeu estimé (comme le « Game Rating » de chess.com) et coups remarquables ──
+  const level = computeLevel(D);
+
   // ── style de jeu ──
   const style = computeStyle(D, games);
 
   // ── priorités ──
   const weaknesses = rankWeaknesses({ n, cats, catsRaw, catsGames, examples, skills, bpg, openingList, timeLosses, losses });
 
-  return { total: games.length, analysed: n, blunders, mistakes, bpg, skills, cats, catsRaw, examples, openings: openingList, style, weaknesses, timeLosses, losses };
+  return { total: games.length, analysed: n, blunders, mistakes, bpg, skills, cats, catsRaw, examples, openings: openingList, style, weaknesses, timeLosses, losses, ...level };
+}
+
+const median = (a) => {
+  if (!a.length) return null;
+  const b = [...a].sort((x, y) => x - y);
+  const k = Math.floor(b.length / 2);
+  return b.length % 2 ? b[k] : (b[k - 1] + b[k]) / 2;
+};
+
+/**
+ * Elo estimé : médiane des 10 dernières parties analysées (indicatif), courbe par partie,
+ * et totaux de coups brillants / forts / occasions manquées.
+ */
+function computeLevel(D) {
+  const dated = [...D].sort((a, b) => String(a.g.date || '').localeCompare(String(b.g.date || '')));
+  const withElo = dated
+    .map(({ g, d }) => ({ g, d, elo: d.estElo ?? g.review?.elo?.[g.userColor] ?? null, acpl: g.review?.acpl?.[g.userColor] ?? null }))
+    .filter((x) => x.elo);
+  const last = withElo.slice(-10);
+  const med = median(last.map((x) => x.elo));
+  const acpls = last.map((x) => x.acpl).filter((v) => v !== null && v !== undefined);
+  const brilliantMoves = [];
+  let brilliants = 0;
+  let greats = 0;
+  let misses = 0;
+  for (const { g, d } of dated) {
+    brilliants += d.brilliants || 0;
+    greats += d.greats || 0;
+    misses += d.misses || 0;
+    for (const i of d.brilliantIdx || []) brilliantMoves.push({ gameId: g.id, i, date: g.date });
+  }
+  return {
+    estElo: med === null ? null : Math.round(med / 25) * 25,
+    estEloN: last.length,
+    estAcpl: acpls.length ? Math.round(median(acpls)) : null,
+    estEloSeries: withElo.map((x) => ({ date: x.g.date, elo: x.elo, gameId: x.g.id })),
+    brilliants,
+    greats,
+    misses,
+    brilliantMoves,
+  };
 }
 
 function computeStyle(D, games) {

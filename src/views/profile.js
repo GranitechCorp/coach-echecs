@@ -3,7 +3,7 @@
 import { db, update } from '../storage.js';
 import { setTitle, esc, md, toast } from '../ui.js';
 import { syncChesscom, TIME_FR } from '../chesscom.js';
-import { analyzeMany } from '../analyzer.js';
+import { analyzeMany, REVIEW_VERSION } from '../analyzer.js';
 import { computeInsights, filterGames, SKILLS, linesForFamily, lessonTitle } from '../insights.js';
 import { recommendOpenings, SLOTS } from '../advisor.js';
 import { buildProgram, isDone, itemHref } from '../program.js';
@@ -12,7 +12,8 @@ import { THEME_LABELS } from '../data/themes.js';
 import { frOpening } from '../data/opening-names.js';
 import { OPENING_LINES } from '../data/openings.js';
 import { askCoach, coachReady, inClaudeViewer } from '../coach-ai.js';
-import { aiEnabled, profileReportLocal } from '../local-coach.js';
+import { aiEnabled, profileReportLocal, acplForElo } from '../local-coach.js';
+import { TAGS, tagCount } from '../explain.js';
 import { promptProfileReport } from '../prompts.js';
 
 export const tab = 'profile';
@@ -47,6 +48,8 @@ export function render(root) {
     const elo = s.profile.currentElo || s.profile.startElo;
     const recs = recommendOpenings(ins, elo);
     const todo = games.filter((g) => !g.review?.derived && !g.review?.evals).reverse(); // les plus récentes d'abord
+    // analyses faites avec une version précédente (sans 2e ligne du moteur : pas de « coups forts »)
+    const old = games.filter((g) => g.review?.evals && (g.review.v || 0) < REVIEW_VERSION && !g.review.evals.some((e) => e.second)).reverse();
     const r = s.ccRatings || {};
     const prog = s.program;
     const progFresh = prog && Date.now() - new Date(prog.created).getTime() < 7 * 86400000;
@@ -55,7 +58,7 @@ export function render(root) {
       <section class="card">
         <div class="row between"><h2>♟ ${esc(s.profile.chesscomUser || 'chess.com')}</h2><a class="small muted" href="#/settings">changer</a></div>
         <div class="chips">${Object.entries(r).map(([k, v]) => `<span class="chip small"><b>${v.rating}</b><small>${esc(TIME_FR[k] || k)}</small></span>`).join('') || '<span class="muted small">Classements non chargés</span>'}</div>
-        <p class="small muted">Dernière synchro : ${ago(s.sync?.at)} · ${s.games.length} parties enregistrées</p>
+        <p class="small muted">Dernière synchro : ${ago(s.sync?.at)} · ${s.games.length} partie${s.games.length > 1 ? 's' : ''} enregistrée${s.games.length > 1 ? 's' : ''}</p>
         ${inClaudeViewer() ? `<p class="small">Dans claude.ai, la page ne peut pas contacter chess.com elle-même : importe tes parties en PGN (copier-coller ou fichier), c’est rapide.</p>
         <div class="row wrap"><a class="btn primary small" href="#/analysis">⬆ Importer mes parties chess.com</a></div>` : `<div class="row wrap">
           <button class="btn primary small" id="sync">⟳ Synchroniser chess.com</button>
@@ -67,17 +70,21 @@ export function render(root) {
       <section class="card">
         <h2>Parties prises en compte</h2>
         <div class="chips" id="filter">${CLASSES.map(([id, l]) => `<button class="chip small ${filter.includes(id) ? 'on' : ''}" data-f="${id}">${l}</button>`).join('')}</div>
-        <p class="small">${games.length} parties · <b>${ins.analysed}</b> analysées par Stockfish${todo.length ? ` · ${todo.length} à analyser` : ''}</p>
+        <p class="small">${games.length} partie${games.length > 1 ? 's' : ''} · <b>${ins.analysed}</b> analysée${ins.analysed > 1 ? 's' : ''} par Stockfish${todo.length ? ` · ${todo.length} à analyser` : ''}</p>
         ${todo.length ? `<div class="row wrap"><button class="btn small" id="an10">Analyser les ${Math.min(10, todo.length)} plus récentes</button>${todo.length > 10 ? `<button class="btn ghost small" id="anall">Tout analyser (${todo.length})</button>` : ''}</div>
-        <p class="muted small">≈ 30 s par partie sur ton téléphone. Garde l’appli ouverte ; tu peux arrêter et reprendre quand tu veux.</p>` : ''}
+        <p class="muted small">≈ 45 s par partie sur ton téléphone. Garde l’appli ouverte ; tu peux arrêter et reprendre quand tu veux.</p>` : ''}
+        ${old.length ? `<p class="small muted ri-legacy">${old.length > 1 ? `${old.length} parties ont été analysées` : '1 partie a été analysée'} avec une version précédente : coups brillants, occasions manquées et Elo estimé y sont repérés, mais pas encore les coups forts. <button class="btn ghost small" id="anold">⟳ Mettre à jour ${old.length > 10 ? 'les 10 plus récentes' : old.length > 1 ? `ces ${old.length} parties` : 'cette partie'}</button></p>` : ''}
         <div id="an-out" hidden><div class="progress"><div id="an-bar" style="width:0%"></div></div><div class="row between small"><span id="an-txt"></span><button class="btn ghost small" id="an-stop">Arrêter</button></div></div>
       </section>
+
+      ${levelCard(ins, s)}
 
       ${ins.analysed < 3 ? `<section class="card"><p>📊 Analyse au moins <b>3 parties</b> pour obtenir ton diagnostic. Plus il y a de parties analysées (idéalement 20 ou plus), plus le diagnostic est fiable.</p></section>` : `
       <section class="card">
         <h2>Ton diagnostic</h2>
         <p class="small muted">Sur ${ins.analysed} parties analysées · ${ins.bpg.toFixed(1)} gaffe${ins.bpg >= 2 ? 's' : ''} par partie. Touche une compétence pour savoir comment elle est calculée.</p>
         ${skillBars(SKILLS.map((k) => ({ label: k.label, value: ins.skills[k.id], help: k.help })))}
+        ${tagsDiagnostic(ins)}
       </section>
 
       <section class="card">
@@ -182,6 +189,16 @@ export function render(root) {
     });
     root.querySelector('#blunder-chart').innerHTML = lineChart(bp, { yLabel: 'Gaffes par partie', fmt: (v) => v.toFixed(1) });
     attachLineTooltip(root.querySelector('#blunder-chart'), bp);
+    const estBox = root.querySelector('#est-chart');
+    if (estBox) {
+      const ep = ins.estEloSeries.map((p) => {
+        const day = new Date(p.date);
+        const known = !!p.date && !Number.isNaN(day.getTime()); // partie sans date : pas de « Invalid Date »
+        return { y: p.elo, x: known ? day.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '', label: `${known ? day.toLocaleDateString('fr-FR') + ' : ' : ''}≈ ${p.elo}` };
+      });
+      estBox.innerHTML = lineChart(ep, { yLabel: 'Elo estimé par partie', fmt: (v) => String(Math.round(v / 25) * 25) });
+      attachLineTooltip(estBox, ep);
+    }
 
     // ── événements ──
     const syncBtn = root.querySelector('#sync');
@@ -238,6 +255,7 @@ export function render(root) {
     };
     root.querySelector('#an10')?.addEventListener('click', () => runAnalysis(todo.slice(0, 10)));
     root.querySelector('#anall')?.addEventListener('click', () => runAnalysis(todo));
+    root.querySelector('#anold')?.addEventListener('click', () => runAnalysis(old.slice(0, 10)));
     const gen = () => {
       buildProgram(ins);
       toast('Programme généré ✓');
@@ -273,3 +291,56 @@ export function render(root) {
   };
 }
 
+/** Elo chess.com de référence (rapide, sinon blitz, sinon classement mémorisé). */
+function chesscomElo(s) {
+  const r = s.ccRatings || {};
+  if (r.rapid?.rating) return { value: r.rapid.rating, label: 'Elo chess.com en rapide' };
+  if (r.blitz?.rating) return { value: r.blitz.rating, label: 'Elo chess.com en blitz' };
+  if (s.profile.currentElo) return { value: s.profile.currentElo, label: 'ton Elo chess.com' };
+  return null;
+}
+
+/** Carte « Niveau de jeu estimé » : médiane des dernières parties, comparaison et courbe. */
+function levelCard(ins, s) {
+  if (!ins.estElo) return '';
+  const cc = chesscomElo(s);
+  const n = ins.estEloN;
+  const diff = cc ? ins.estElo - cc.value : 0;
+  let cmp = '';
+  if (cc) {
+    if (diff >= 150) cmp = `Tu joues environ ${Math.round(diff / 25) * 25} points au-dessus de ton classement : si tu restes régulier, ton Elo devrait monter.`;
+    else if (diff <= -150) cmp = `C’est sous ton classement : en général, ce sont quelques grosses gaffes qui font chuter la moyenne. Les éviter, c’est ton plus gros levier.`;
+    else cmp = 'C’est cohérent avec ton classement chess.com.';
+  }
+  const goal = s.profile.goalElo;
+  const target = goal && ins.estAcpl !== null && ins.estElo < goal
+    ? `<p class="small">🎯 Pour jouer à ${goal}, il faut perdre en moyenne environ <b>${acplForElo(goal)} centipions</b> par coup ; tu en es à <b>${ins.estAcpl}</b>.</p>`
+    : '';
+  const tags = ['brilliant', 'great', 'miss'].filter((t) => ins[{ brilliant: 'brilliants', great: 'greats', miss: 'misses' }[t]]);
+  const lastB = ins.brilliantMoves.at(-1);
+  return `<section class="card">
+    <h2>Niveau de jeu estimé</h2>
+    <div class="ri-level-row">
+      <div><div class="big">≈ ${ins.estElo}</div><div class="small muted">${n > 1 ? `médiane de tes ${n} dernières parties analysées` : 'd’après ta seule partie analysée'}</div></div>
+      ${cc ? `<div><div class="big muted">${cc.value}</div><div class="small muted">${esc(cc.label)}</div></div>` : ''}
+    </div>
+    ${cmp ? `<p class="small">${cmp}</p>` : ''}
+    ${n < 5 ? '<p class="small muted">Encore peu de parties : l’estimation deviendra fiable à partir de 5 à 10 parties analysées.</p>' : ''}
+    ${target}
+    ${ins.estEloSeries.length >= 2 ? '<p class="small muted">Elo estimé à chaque partie</p><div id="est-chart"></div>' : ''}
+    ${tags.length ? `<div class="ri-tags-line">${tags.map((t) => `<span class="badge ri-tag ri-${TAGS[t].css}"><b>${TAGS[t].sym}</b> ${tagCount(t, ins[{ brilliant: 'brilliants', great: 'greats', miss: 'misses' }[t]])}</span>`).join('')}</div>` : ''}
+    ${lastB ? `<a class="btn small ri-btn-brilliant" href="#/review/${encodeURIComponent(lastB.gameId)}/${lastB.i}">💎 Revoir mon dernier coup brillant</a>` : ''}
+    <p class="muted small">Estimation indicative, calculée comme le « Game Rating » de chess.com : plus tu perds peu de terrain à chaque coup (mesuré par Stockfish), plus elle est haute. Une partie isolée varie beaucoup : c’est la tendance qui compte.</p>
+  </section>`;
+}
+
+/** Ligne du diagnostic sur les coups brillants / forts et les occasions manquées. */
+function tagsDiagnostic(ins) {
+  const { brilliants: b, greats: g, misses: m } = ins;
+  if (!b && !g && !m) return '';
+  const good = [b ? `💎 ${tagCount('brilliant', b)}` : '', g ? tagCount('great', g) : ''].filter(Boolean).join(' et ');
+  const parts = [];
+  if (good) parts.push(`Tu as déjà joué ${good} : tu sais trouver des coups difficiles.`);
+  if (m) parts.push(`${good ? 'Mais ' : ''}${tagCount('miss', m)} : ${m > 1 ? 'des erreurs adverses que tu n’as pas punies' : 'une erreur adverse que tu n’as pas punie'}.`);
+  return `<p class="small">${parts.join(' ')}</p>`;
+}

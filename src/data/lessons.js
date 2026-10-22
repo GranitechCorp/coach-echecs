@@ -3,8 +3,12 @@
 //  text   : explication (+ position facultative, flèches `shapes` : ['e2e4', 'green'] ou ['d5', 'red'] pour un cercle)
 //  puzzle : trouver le(s) coup(s) — `solution` en UCI, les coups adverses sont joués automatiquement
 //  quiz   : question à choix multiple
-//  play   : jouer la position contre l'ordinateur jusqu'à l'objectif (`goal` : 'mate' | 'promote')
+//  play   : jouer la position contre l'ordinateur jusqu'à l'objectif (`goal` : 'mate' | 'promote' | 'draw') ;
+//           'draw' = tenir `maxMoves` coups sans que l'évaluation passe sous −2 ; `failBelow` (centipions) pour les autres
+//  square : toucher les cases demandées (`targets`), `orientation` 'white' | 'black', `coordinates` (false par défaut)
 // Une position se donne par `fen` ou par `moves` (coups SAN depuis la position initiale).
+// Toute étape peut avoir un bouton `link: { href, label }` ; une leçon peut avoir `practice: { href, label }`
+// (bouton d'entraînement en fin de leçon) et `practiceText`.
 // Tout est vérifié par `npm run check`.
 
 export const MODULES = [
@@ -17,6 +21,84 @@ export const MODULES = [
 
 export const LESSONS = [
   // ───────────────────────── Module 1 ─────────────────────────
+  {
+    id: 'reperage',
+    module: 'base',
+    title: 'Se repérer sur l’échiquier',
+    minutes: 12,
+    practice: { href: '#/vision', label: 'Vision de l’échiquier' },
+    practiceText: 'Le repérage se travaille comme un muscle : 2 minutes par jour dans « Vision de l’échiquier », et c4, c6 ou h7 deviendront aussi évidents que ton prénom.',
+    steps: [
+      {
+        type: 'text',
+        text: `Chaque case a un nom : **une lettre, puis un chiffre**.
+- Les **colonnes** (verticales) vont de **a à h**, de gauche à droite *quand on regarde depuis le camp blanc*.
+- Les **rangées** (horizontales) vont de **1 à 8** : la rangée 1 est celle des pièces blanches, la 8 celle des pièces noires.
+- **c4** = colonne c, rangée 4. La lettre d'abord, toujours.
+
+Les repères qui rendent ça automatique :
+- **Les pièces de départ donnent leur nom aux colonnes** : a et h = tours, b et g = cavaliers, c et f = fous, d = dame, e = roi. « c4 », c'est *la colonne du fou c1, quatre cases plus haut* ; « h7 », c'est *le pion juste devant la tour h8*.
+- **Rangées 1-2** = camp blanc, **7-8** = camp noir, **4 et 5** = la ligne de front au milieu.
+- **Le centre** : d4, e4, d5, e5.
+- **f2 et f7** : les points faibles du début de partie, défendus seulement par le roi.
+- **Les grandes diagonales** : a1-h8 (cases foncées) et h1-a8 (cases claires).
+- **Le roque** : petit roque = roi en g1 et tour en f1 (g8 et f8 pour les Noirs) ; grand roque = roi en c1 et tour en d1 (c8 et d8).
+
+Sur l'échiquier, les cases c4, c6 et h7 sont entourées.`,
+        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        orientation: 'white',
+        shapes: [['c4', 'green'], ['c6', 'green'], ['h7', 'green']],
+      },
+      {
+        type: 'square',
+        text: 'À toi ! Plus de lettres ni de chiffres au bord de l’échiquier : sers-toi des pièces comme repères (la colonne du fou, la rangée des pions…). Touche les cases demandées, sans te presser.',
+        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        orientation: 'white',
+        coordinates: false,
+        targets: ['e4', 'd5', 'c4', 'c6', 'h7', 'f7', 'f3', 'g1', 'b5', 'e6'],
+      },
+      {
+        type: 'text',
+        text: `**L'astuce de la couleur d'une case** : remplace la lettre par son rang (a = 1, b = 2, c = 3, d = 4, e = 5, f = 6, g = 7, h = 8) et ajoute le chiffre.
+- Total **pair** → case **foncée** (a1 : 1 + 1 = 2).
+- Total **impair** → case **claire** (h1 : 8 + 1 = 9 ; c4 : 3 + 4 = 7).
+- Repère rapide : *« la dame sur sa couleur »* (dame blanche en d1, case claire ; dame noire en d8, case foncée), et chaque joueur a une case **claire dans son coin droit**.
+
+Pourquoi c'est utile : un fou reste toute la partie sur sa couleur. Si tu sais que c6 est claire, tu sais aussitôt que ton fou des cases foncées ne pourra jamais l'attaquer.
+
+**Lire la notation française** :
+- Pièces : **R** roi, **D** dame, **T** tour, **F** fou, **C** cavalier. Le pion n'a pas de lettre : « e4 » = un pion va en e4.
+- **x** = prise : Fxe5 = le fou prend en e5 ; exd5 = le pion de la colonne e prend en d5.
+- **+** = échec, **#** = mat ; **O‑O** = petit roque, **O‑O‑O** = grand roque ; **e8=D** = le pion arrive en e8 et devient une dame.
+- **Cbd7** : deux cavaliers peuvent aller en d7, c'est celui de la colonne b qui y va.
+- Dans l'appli, les listes de coups utilisent de petites figurines : ♞f3 = Cf3.`,
+      },
+      {
+        type: 'quiz',
+        question: 'Sans regarder un échiquier : de quelle couleur est la case c6 ?',
+        choices: ['Claire', 'Foncée'],
+        answer: 0,
+        explain: 'c = 3, et 3 + 6 = 9 : impair, donc **claire**. Autre repère : c6 est sur la grande diagonale claire a8-h1, comme d5, e4 et f3. C’est la case de ton premier coup dans la Caro-Kann (…c6).',
+      },
+      {
+        type: 'quiz',
+        question: 'Que signifie le coup « Fxe5+ » ?',
+        choices: ['Le fou va en e5 sans rien prendre', 'Le fou prend la pièce qui est en e5 et donne échec', 'Le pion e prend sur la 5e rangée avec échec'],
+        answer: 1,
+        explain: '**F** = fou, **x** = prise, **e5** = la case d’arrivée, **+** = échec. La case écrite est toujours la case où la pièce arrive.',
+      },
+      {
+        type: 'square',
+        text: `Avec les Noirs, l'échiquier est **retourné** : a1 est en haut à droite, h8 en bas à gauche. **Les cases gardent leur nom !**
+Repères : tes pions sont sur la rangée 7, ta dame en d8, ton roi en e8. Les colonnes se lisent maintenant de h (à gauche) vers a (à droite). Touche les cases de ta Caro-Kann : c6, d5, f5 (la case de ton fou), e6…`,
+        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        orientation: 'black',
+        coordinates: false,
+        targets: ['c6', 'd5', 'f5', 'e6', 'd7', 'f6', 'g6', 'b6', 'e4', 'h7'],
+        link: { href: '#/vision', label: '🎯 S’entraîner chaque jour : Vision de l’échiquier' },
+      },
+    ],
+  },
   {
     id: 'routine',
     module: 'base',
@@ -400,6 +482,77 @@ Question à se poser : « Qu'est-ce qui empêche mon coup gagnant ? Puis-je supp
       },
     ],
   },
+  {
+    id: 'sacrifices',
+    module: 'tactique',
+    title: 'Le coup brillant : sacrifier pour gagner',
+    minutes: 14,
+    steps: [
+      {
+        type: 'text',
+        text: `Un **sacrifice**, c'est donner du matériel **exprès**, pour obtenir davantage en échange. Sur chess.com, c'est souvent ce genre de coup qui reçoit la mention « Brillant » (!!).
+
+Un sacrifice marche quand il rapporte, **de façon forcée** :
+- un **mat** ;
+- **plus de matériel** que ce qu'il coûte ;
+- une **attaque décisive** contre un roi privé de défenseurs.
+
+La règle d'or : un sacrifice **se calcule**. Avant de donner une pièce, suis la suite forcée (échecs, prises, menaces) jusqu'au bout. Si tu ne vois pas ce que tu gagnes, ce n'est pas un sacrifice : c'est une gaffe.
+
+Les grands classiques :
+- **la destruction du roque** : le sacrifice grec Fxh7+ ;
+- **l'attraction** : forcer le roi (ou une pièce) à venir sur une case où il sera maté ou pris ;
+- **la déviation** : forcer un défenseur à abandonner son poste.`,
+      },
+      {
+        type: 'text',
+        text: `**Le sacrifice grec** : Fxh7+ ! Rxh7, Cg5+ puis Dh5, et la dame menace Dh7 mat.
+
+Avant de le jouer, vérifie les ingrédients :
+- un **fou en d3** qui vise h7 ;
+- un **cavalier en f3** qui pourra sauter en g5 sans être pris ;
+- une **dame** qui peut arriver en h5 ;
+- **pas de cavalier noir en f6** pour défendre h7 (ici, le pion e5 l'a chassé) ;
+- le roi noir n'a pas de case de fuite confortable.
+
+Si le roi recule en g8, Dh5 menace le mat en h7. S'il avance en g6 ou h6, la dame et le cavalier le traquent en pleine rue.`,
+        moves: 'e4 e6 d4 d5 Nc3 Nf6 e5 Nfd7 Nf3 Bb4 Bd3 c5 O-O Nc6 Re1 O-O',
+        orientation: 'white',
+        shapes: [['d3h7', 'green'], ['f3g5', 'blue'], ['d1h5', 'blue']],
+      },
+      {
+        type: 'puzzle',
+        text: 'Défense française : tous les ingrédients sont réunis. À toi de jouer le sacrifice grec !',
+        moves: 'e4 e6 d4 d5 Nc3 Nf6 e5 Nfd7 Nf3 Bb4 Bd3 c5 O-O Nc6 Re1 O-O',
+        solution: ['d3h7', 'g8h7', 'f3g5', 'h7g8', 'd1h5'],
+        hint: 'Commence par donner ton fou en h7, avec échec.',
+        success: 'Fxh7+ ! Rxh7 Cg5+ Rg8 Dh5 : Dh7 mat est imparable, les Noirs doivent donner leur dame (…Dxg5). Un fou sacrifié qui rapporte une dame !',
+      },
+      {
+        type: 'puzzle',
+        text: 'Réti – Tartakower, Vienne 1910 : une Caro-Kann ! Les Noirs viennent de prendre le cavalier e4. Les Blancs ont trouvé l’un des coups les plus célèbres de l’histoire. Mat en 3 !',
+        moves: 'e4 c6 d4 d5 Nc3 dxe4 Nxe4 Nf6 Qd3 e5 dxe5 Qa5+ Bd2 Qxe5 O-O-O Nxe4',
+        solution: ['d3d8', 'e8d8', 'd2g5', 'd8e8', 'd1d8'],
+        hint: 'Attire le roi noir en d8 : ta tour d1 et ton fou d2 l’y attendent.',
+        success: 'Dd8+ !! Rxd8 Fg5+ (échec double : la tour d1 et le fou) Re8 Td8 mat (ou …Rc7 Fd8 mat). C’est une **attraction** : la dame a forcé le roi à venir sur la case de son exécution. Avec les Noirs, retiens la leçon : ne laisse pas ton roi au centre face à une tour sur une colonne ouverte.',
+      },
+      {
+        type: 'puzzle',
+        text: 'Avec les Noirs. La 1re rangée blanche n’est gardée que par la tour h1. Sacrifie ta dame pour la détourner de son poste : mat en 3 !',
+        fen: '3rr1k1/pp3pp1/2p1q2p/5b2/P4QPP/2P2P2/1BPR4/2K4R b - - 0 23',
+        solution: ['e6e1', 'h1e1', 'e8e1', 'd2d1', 'e1d1'],
+        hint: 'Ta dame peut donner échec en e1… même si elle s’y fait prendre.',
+        success: '…De1+ !! Txe1 Txe1+ Td1 Texd1 mat. La tour h1 a été **déviée** : en prenant la dame, elle a abandonné la garde de la 1re rangée.',
+      },
+      {
+        type: 'quiz',
+        question: 'Quand un sacrifice est-il une bonne idée ?',
+        choices: ['Quand l’adversaire a l’air distrait', 'Quand je vois une suite forcée qui rapporte plus que ce que je donne (mat, matériel, attaque décisive)', 'Quand je suis en retard de développement et que je veux du jeu'],
+        answer: 1,
+        explain: 'Un sacrifice se calcule : échecs, prises, menaces, jusqu’au bout. « Espérer » que l’adversaire se trompe marche parfois à 900 Elo… et coûte beaucoup de points ensuite.',
+      },
+    ],
+  },
 
   // ───────────────────────── Module 3 : Finales ─────────────────────────
   {
@@ -485,6 +638,59 @@ Garde ta tour **loin** du roi adverse pour qu'il ne puisse pas l'attaquer.`,
     ],
   },
   {
+    id: 'pions-passes',
+    module: 'finales',
+    title: 'Les pions passés et la percée',
+    minutes: 12,
+    practice: { href: '#/puzzles/theme/endgame', label: 'Exercices de finale' },
+    steps: [
+      {
+        type: 'text',
+        text: `Un **pion passé** n'a plus aucun pion adverse devant lui, ni sur les colonnes voisines : seules des pièces peuvent l'arrêter. *« Les pions passés doivent être poussés ! »*
+- **Pion passé protégé** (défendu par un autre pion) : l'adversaire doit le surveiller sans jamais pouvoir le prendre. En finale de pions, c'est souvent gagnant.
+- **Pion passé éloigné** (loin des autres pions) : il attire le roi adverse d'un côté pendant que ton roi dévore les pions de l'autre côté.
+- **Pions passés liés** (côte à côte) : ils se protègent en avançant. Deux pions liés sur la 6e rangée battent une tour !
+- **Contre un pion passé adverse** : **bloque-le** avec une pièce posée juste devant lui, idéalement un cavalier ou ton roi (Nimzowitsch).
+- **Course de pions** : avant de te lancer, compte les coups de chaque côté (la règle du carré).
+
+Ici, les Blancs ont un pion passé éloigné en a4 : le roi noir devra aller le chercher.`,
+        fen: '8/6pp/3k4/8/P2K4/8/6PP/8 w - - 0 1',
+        shapes: [['a4a8', 'green']],
+      },
+      {
+        type: 'puzzle',
+        text: 'La célèbre **percée** : trois pions contre trois, les rois sont loin. Fais une dame !',
+        fen: '6k1/ppp5/8/PPP5/8/8/8/7K w - - 0 1',
+        solution: ['b5b6', 'a7b6', 'c5c6', 'b7c6', 'a5a6'],
+        hint: 'Sacrifie le pion du milieu.',
+        success: 'b6 !! Si …axb6, c6 ! bxc6 a6 et le pion a file à dame. Si …cxb6, a6 ! bxa6 c6. Trois pions sur la 5e rangée contre trois sur la 7e : la percée gagne quand les rois sont trop loin.',
+      },
+      {
+        type: 'puzzle',
+        text: 'Tu as un **pion passé éloigné** en a4. Comment l’utiliser ?',
+        fen: '8/6pp/3k4/8/P2K4/8/6PP/8 w - - 0 1',
+        solution: ['a4a5'],
+        allowOthers: true,
+        hint: 'Pousse-le : le roi noir devra lui courir après.',
+        success: 'a5 ! Le roi noir doit partir arrêter ce pion… pendant ce temps, ton roi file manger les pions g7 et h7. Le pion éloigné sert de **leurre**.',
+      },
+      {
+        type: 'quiz',
+        question: 'Les Blancs ont un pion passé en d4, et tu as les Noirs. Où places-tu ton cavalier ?',
+        choices: ['En d5, juste devant le pion', 'En b3, pour l’attaquer de loin', 'Le plus loin possible, pour attaquer ailleurs'],
+        answer: 0,
+        explain: 'Bloque le pion passé juste devant lui : il ne peut plus avancer, et ton cavalier y est solide (aucun pion ne peut l’en chasser). Nimzowitsch : un pion passé est un criminel qu’il faut mettre sous les verrous.',
+      },
+      {
+        type: 'play',
+        text: 'À toi de jouer contre l’ordinateur : utilise ton pion éloigné comme leurre, mange ses pions avec ton roi, puis va à dame.',
+        fen: '8/6pp/3k4/8/P2K4/8/6PP/8 w - - 0 1',
+        goal: 'promote',
+        maxMoves: 20,
+      },
+    ],
+  },
+  {
     id: 'tours',
     module: 'finales',
     title: 'Finales de tours : les règles d’or',
@@ -510,6 +716,68 @@ Garde ta tour **loin** du roi adverse pour qu'il ne puisse pas l'attaquer.`,
         success: 'Td1+ ! Puis Td4 : le « pont » qui protégera ton roi des échecs.',
       },
       { type: 'play', text: 'Gagne la position de Lucena (fais dame, l’ordinateur défend).', fen: '1K1k4/1P6/8/8/8/8/r7/2R5 w - - 0 1', goal: 'promote', maxMoves: 20 },
+    ],
+  },
+  {
+    id: 'philidor',
+    module: 'finales',
+    title: 'Défendre : la position de Philidor',
+    minutes: 15,
+    practice: { href: '#/puzzles/theme/endgame', label: 'Exercices de finale' },
+    steps: [
+      {
+        type: 'text',
+        text: `Tour + pion contre tour : si ton roi est **devant le pion**, c'est nulle… à condition de connaître la **position de Philidor** (1777). Deux temps :
+1. **Ta tour sur ta 3e rangée** (la 6e pour les Noirs) : le roi blanc ne peut pas y monter sans recevoir des échecs. Ne bouge pas ton roi, fais des va-et-vient avec la tour sur cette rangée.
+2. **Dès que le pion avance sur cette rangée**, ta tour file **tout au fond** (1re rangée) et donne des **échecs par derrière**. Le pion n'abrite plus le roi blanc : il ne peut pas échapper aux échecs.
+
+L'erreur classique : la tour passive sur la dernière rangée, le roi blanc arrive sur la 6e rangée… et c'est perdu.`,
+        fen: '4k3/1R6/r7/4PK2/8/8/8/8 b - - 0 1',
+        orientation: 'black',
+        shapes: [['a6h6', 'green'], ['d6', 'red'], ['e6', 'red'], ['f6', 'red']],
+      },
+      {
+        type: 'quiz',
+        question: 'Le roi blanc est en f5, son pion en e5, ton roi en e8. Où places-tu ta tour ?',
+        fen: '4k3/1R6/8/4PK2/8/8/8/r7 b - - 0 1',
+        orientation: 'black',
+        choices: ['Sur la 6e rangée (en a6 par exemple), pour interdire au roi blanc d’y monter', 'Sur la 8e rangée, à côté de mon roi, pour le protéger', 'Le plus près possible du roi blanc, pour l’attaquer'],
+        answer: 0,
+        explain: 'Tour sur la 6e rangée : si le roi blanc veut monter en d6, e6 ou f6, il reçoit un échec. Les Blancs ne peuvent progresser qu’en poussant e6… et là, ta tour change de rôle.',
+      },
+      {
+        type: 'puzzle',
+        text: 'Les Blancs viennent de pousser leur pion en e6. Ta tour, restée sur la 6e rangée, doit changer de rôle : trouve le coup qui sauve la nulle.',
+        fen: '4k3/1R6/r3P3/5K2/8/8/8/8 b - - 0 1',
+        solution: ['a6a1', 'f5f6', 'a1f1'],
+        allowOthers: true,
+        hint: 'Le pion bloque maintenant tes échecs sur la rangée. Où ta tour peut-elle attaquer le roi blanc par derrière ?',
+        success: '…Ta1 ! puis …Tf1+ : des échecs par derrière, et le roi blanc n’a plus d’abri (son pion est devant lui). Rester sur la 6e rangée (…Tc6 ?) perdait : après Rf6, les Blancs menacent Tb8 mat.',
+      },
+      {
+        type: 'play',
+        text: 'À toi de défendre avec les Noirs ! Garde ta tour sur la 6e rangée ; si le pion arrive en e6, file au fond et donne des échecs par derrière.',
+        fen: '4k3/1R6/r7/4PK2/8/8/8/8 b - - 0 1',
+        goal: 'draw',
+        maxMoves: 12,
+      },
+      {
+        type: 'puzzle',
+        text: 'Roi seul contre roi et pion. Un seul coup sauve la nulle : lequel ?',
+        fen: '4k3/8/8/4K3/4P3/8/8/8 b - - 0 1',
+        solution: ['e8e7'],
+        hint: 'Mets ton roi face au sien, avec une case entre les deux.',
+        success: '…Re7 ! Tu prends l’**opposition** : les rois se font face et c’est aux Blancs de jouer, donc leur roi doit céder le passage. Si tu avais reculé (…Rd8 ?), le roi blanc entrait en d6 ou f6, et c’était perdu.',
+      },
+      {
+        type: 'play',
+        text: `Tiens la nulle contre l'ordinateur ! Les deux règles :
+- garde ton roi **devant le pion** ;
+- quand les rois se font face avec une case entre eux, fais en sorte que ce soit **à lui** de jouer : c'est l'opposition. Quand le pion approche de ta dernière rangée, recule ton roi **droit devant lui**.`,
+        fen: '8/8/4k3/8/3KP3/8/8/8 b - - 0 1',
+        goal: 'draw',
+        maxMoves: 10,
+      },
     ],
   },
 
@@ -602,6 +870,161 @@ Méthode : 1) quelles sont les faiblesses (les miennes, les siennes) ? 2) quelle
         choices: ['J’attaque avec mes pions de l’aile dame (a, b, c) vers son roi', 'Je pousse mes pions g et h', 'J’échange les dames tout de suite'],
         answer: 0,
         explain: 'Roques opposés = course à l’attaque : pousse tes pions vers SON roi (ici l’aile dame), sans affaiblir le tien.',
+      },
+    ],
+  },
+  {
+    id: 'attaque-roi',
+    module: 'strategie',
+    title: 'Attaquer le roi roqué',
+    minutes: 12,
+    steps: [
+      {
+        type: 'text',
+        text: `Pour attaquer un roi roqué, il faut **plus d'attaquants que de défenseurs** autour de lui. Compte-les avant de te lancer !
+
+Les plans types :
+- **Roques opposés** : chacun pousse ses pions vers le roi adverse (ils ne protègent pas son propre roi). C'est une course : la vitesse compte plus qu'un pion.
+- **Les crochets** : un pion avancé devant le roi (h6, g6) donne prise à tes pions : g4-g5 contre h6, h4-h5 contre g6. Le but est d'**ouvrir des colonnes**.
+- **La colonne h ouverte** : une tour en h1 et la dame, et les cases h7 ou h8 deviennent mortelles.
+- **Les pièces qui visent h7 et g7** : un fou en d3, la dame en h5 ou h4, un cavalier en g5 ou en f5.
+- **Le défenseur n°1 est le cavalier f6** : chasse-le (e5) ou élimine-le (Fxf6, Txf6), même si ça coûte du matériel.
+
+Ici, ta Caro-Kann (variante classique) : les Blancs ont roqué côté dame, toi côté roi. Leur plan : g4-g5, en s'appuyant sur ton pion h6 comme crochet.`,
+        moves: 'e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5 Ng3 Bg6 h4 h6 Nf3 Nd7 h5 Bh7 Bd3 Bxd3 Qxd3 e6 Bd2 Ngf6 O-O-O Be7 Kb1 O-O',
+        orientation: 'black',
+        shapes: [['g2g4', 'red'], ['g4g5', 'red'], ['h6', 'red']],
+      },
+      {
+        type: 'quiz',
+        question: 'Même position, les Blancs ont joué De2. Tu as les Noirs : quel est ton plan ?',
+        moves: 'e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5 Ng3 Bg6 h4 h6 Nf3 Nd7 h5 Bh7 Bd3 Bxd3 Qxd3 e6 Bd2 Ngf6 O-O-O Be7 Kb1 O-O Qe2',
+        choices: ['Attendre qu’il attaque, puis défendre', 'Contre-attaquer vite son roi : …c5, …Db6 ou …Da5, puis …b5', 'Pousser …g5 pour bloquer son aile roi'],
+        answer: 1,
+        explain: 'Roques opposés = course. Son roi est en b1 : ouvre des lignes de ce côté-là (…c5, …b5) et amène ta dame (…Db6, …Da5) avant que g4-g5 n’arrive chez toi. Pousser …g5 créerait de nouvelles faiblesses devant ton propre roi.',
+      },
+      {
+        type: 'puzzle',
+        text: 'Ta dame et ton fou visent h7. Un seul défenseur : le cavalier f6. Élimine-le !',
+        fen: 'r2q1rk1/pp3ppp/2p1pn2/3p4/3P3Q/2PBP3/PP4PP/R4RK1 w - - 0 1',
+        solution: ['f1f6'],
+        hint: 'Ta tour f1 peut se sacrifier sur f6.',
+        success: 'Txf6 ! Si …gxf6 ou …Dxf6, Dxh7 mat. Sinon, tu as gagné une pièce. Une tour contre un cavalier, c’est cher payé… sauf quand ça ouvre la porte du roi.',
+      },
+      {
+        type: 'puzzle',
+        text: 'La colonne h est ouverte et ton fou g5 contrôle les cases foncées. Mat en 2 !',
+        fen: '2r1rk2/pp3p2/6p1/4PbBR/8/P1p2P2/2P3PP/4R1K1 w - - 0 31',
+        solution: ['h5h8', 'f8g7', 'g5f6'],
+        hint: 'Envoie ta tour tout au fond de la colonne h.',
+        success: 'Th8+ ! Rg7 (seule case) Ff6 mat : le fou, soutenu par le pion e5, ferme le filet, et la tour h8 ne peut pas être prise.',
+      },
+      {
+        type: 'puzzle',
+        text: 'Ton cavalier f6 est planté devant le roi noir et ta dame est sur la colonne h. Mat en 2 !',
+        fen: '5r1k/ppr1np2/q3pNp1/P2pP1P1/3P1P1b/7Q/6KP/1n6 w - - 4 31',
+        solution: ['h3h4', 'h8g7', 'h4h6'],
+        hint: 'Prends le fou h4 : avec échec !',
+        success: 'Dxh4+ Rg7 Dh6 mat. Le cavalier f6 (soutenu par e5) contrôle h7 et g8 : la dame n’a plus qu’à se poser en h6. Un cavalier en f6 devant un roi roqué vaut souvent une tour !',
+      },
+    ],
+  },
+  {
+    id: 'convertir',
+    module: 'strategie',
+    title: 'Gagner une partie gagnée',
+    minutes: 12,
+    steps: [
+      {
+        type: 'text',
+        text: `Être gagnant et **gagner**, ce n'est pas la même chose ! Beaucoup de parties « gagnées » finissent en nulle (pat, échec perpétuel) ou même en défaite. La méthode des champions (Capablanca) :
+1. **Supprime le contre-jeu d'abord** : à chaque coup, demande-toi « que veut-il ? » (une menace de mat, un pion passé, un échec perpétuel).
+2. **Échange les pièces, pas les pions** : avec une pièce de plus, chaque échange rend ton avantage plus grand. Garde tes pions : ce sont eux qui feront une nouvelle dame.
+3. **Mets ton roi à l'abri** (une case de fuite comme h3), puis **active-le** en finale : c'est une pièce forte.
+4. **Pas de précipitation** : un coup sûr vaut mieux qu'un coup brillant. Vérifie toujours ses échecs, ses prises et ses menaces.
+5. **Méfie-toi du pat** : quand il n'a plus que son roi, laisse-lui toujours une case.`,
+      },
+      {
+        type: 'puzzle',
+        text: 'Tu as une pièce de plus. Avant de chercher à gagner encore plus : que menacent les Noirs ?',
+        fen: 'r4rk1/pp3ppp/3b4/8/7q/2N5/PPPBQ1PP/R4RK1 w - - 0 1',
+        solution: ['g2g3'],
+        allowOthers: true,
+        hint: 'Regarde la case h2 : la dame noire et le fou d6 la visent.',
+        success: 'g3 ! La menace …Dxh2 mat est parée, et ta pièce de plus finira par parler. Quand tu es gagnant, ta première mission est de ne rien laisser à l’adversaire.',
+      },
+      {
+        type: 'puzzle',
+        text: 'Finale de tours : tu as un pion de plus, le pion a. Quel est le chemin le plus simple vers la victoire ?',
+        fen: '8/5ppp/3rk3/8/P3K3/6PP/5P2/3R4 w - - 0 1',
+        solution: ['d1d6'],
+        hint: 'Quand tu as plus de matériel, les échanges sont tes amis.',
+        success: 'Txd6+ ! Rxd6 et la finale de pions est gagnée : ton pion a, éloigné, va attirer le roi noir pendant que ton roi dévore l’aile roi. En finale de tours, l’adversaire aurait encore eu du contre-jeu ; sans les tours, il n’a plus rien.',
+      },
+      {
+        type: 'quiz',
+        question: 'Tu as une tour de plus. Ton adversaire te propose l’échange des dames. Que fais-tu ?',
+        choices: ['J’accepte : moins il reste de pièces, plus ma tour de plus pèse lourd', 'Je refuse : je garde ma dame pour attaquer', 'J’échange plutôt des pions'],
+        answer: 0,
+        explain: 'Avec du matériel en plus, échange les pièces, surtout les dames : c’est la pièce qui donne le plus de chances de contre-attaque à l’adversaire. Et garde tes pions pour faire une nouvelle dame.',
+      },
+      {
+        type: 'play',
+        text: 'Ton adversaire a gaffé une tour : dame et tour contre tour. Maintenant, gagne sans trembler ! Rapproche ta dame et ta tour du roi noir, accepte l’échange des tours s’il se présente, et surveille les échecs de sa tour sur ta 1re rangée.',
+        fen: '2r3k1/5p1p/6p1/8/8/7P/5PP1/R2Q2K1 w - - 0 1',
+        goal: 'mate',
+        maxMoves: 25,
+        failBelow: 300,
+      },
+    ],
+  },
+  {
+    id: 'calcul',
+    module: 'strategie',
+    title: 'Calculer : coups candidats et vérification',
+    minutes: 14,
+    steps: [
+      {
+        type: 'text',
+        text: `Le grand maître Kotov (*Pensez comme un grand maître*) a donné une méthode que tous les forts joueurs utilisent :
+1. **Liste tes coups candidats** (2 à 4) avant d'en calculer un seul.
+2. **Les coups forçants d'abord** : échecs, prises, menaces. Ils limitent les réponses adverses : on peut les calculer jusqu'au bout.
+3. **Calcule chaque ligne une seule fois**, jusqu'à une position calme, puis **visualise la position finale** : qui a gagné du matériel ? un roi est-il en danger ?
+4. **Compare**, puis choisis.
+5. **Vérification anti-gaffe** : « Après mon coup, quels sont SES échecs, ses prises et ses menaces ? »
+
+Et le conseil de Lasker : *« Quand tu vois un bon coup, cherches-en un meilleur. »*`,
+      },
+      {
+        type: 'puzzle',
+        text: 'Avec les Noirs. Applique la méthode : commence par les échecs. Mat en 2 !',
+        fen: 'r3r1k1/pp3ppp/1q1N4/5b2/4n3/3nQP2/PP1BB1PP/2R2KNR b - - 2 18',
+        solution: ['e4d2', 'e3d2', 'b6f2'],
+        hint: 'Un cavalier peut donner échec en prenant quelque chose…',
+        success: '…Cxd2+ ! Dxd2 (forcé) Df2 mat. Le premier échec a **attiré** la dame blanche en d2 : elle ne gardait plus la case f2.',
+      },
+      {
+        type: 'puzzle',
+        text: 'Le pion b7 a l’air gratuit… Vérifie avant de prendre : si ta dame quitte b3, qui défend ta tour d1 ?',
+        fen: '3r2k1/pp3ppp/5q2/8/8/1Q5P/PP3PP1/3R2K1 w - - 0 1',
+        solution: ['d1d8', 'f6d8', 'b3b7'],
+        hint: 'Échange d’abord les tours, avec échec.',
+        success: 'Txd8+ ! Dxd8 Dxb7 : tu gagnes le pion sans risque. Le gourmand Dxb7 ?? tout de suite perdait la tour (…Txd1+), qui n’était défendue que par ta dame. L’ordre des coups compte !',
+      },
+      {
+        type: 'quiz',
+        question: 'Dans une position tactique, quels coups examines-tu en premier ?',
+        choices: ['Les coups qui développent mes pièces', 'Les coups forçants : échecs, prises, menaces', 'Le premier coup qui me vient à l’esprit'],
+        answer: 1,
+        explain: 'Les coups forçants réduisent les réponses de l’adversaire : on peut les calculer jusqu’au bout. Et avant de jouer, fais le même travail pour LUI.',
+      },
+      {
+        type: 'puzzle',
+        text: 'Défi : mat en 4, uniquement avec des échecs. Visualise chaque position avant de toucher une pièce… et attention, les Noirs menacent …Te1 mat !',
+        fen: '4r2k/pp4pp/2p5/q5N1/8/1Q6/PP3PPP/6K1 w - - 0 1',
+        solution: ['g5f7', 'h8g8', 'f7h6', 'g8h8', 'b3g8', 'e8g8', 'h6f7'],
+        hint: 'Cavalier en f7 avec échec, puis échec double en h6…',
+        success: 'Cf7+ Rg8 Ch6+ (échec double) Rh8 Dg8+ !! Txg8 Cf7 mat : le « mat à l’étouffée de Philidor ». Le roi noir est enfermé par ses propres pièces.',
       },
     ],
   },

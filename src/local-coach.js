@@ -7,6 +7,7 @@ import { THEME_LABELS } from './data/themes.js';
 import { matchOpening } from './analyzer.js';
 import { parseLine } from './data/openings.js';
 import { fig, uciToSan } from './chessutil.js';
+import { tagCount } from './explain.js';
 
 /** Les boutons ✨ (qui utilisent Claude) ne s'affichent que si le joueur les a activés. */
 export const aiEnabled = () => db().settings.aiEnabled === true;
@@ -38,6 +39,21 @@ export function gameSummaryLocal(game, review, sans) {
   const acc = Math.round(review.accuracy[me]);
   const verdict = acc >= 90 ? 'une partie très propre' : acc >= 80 ? 'une bonne partie' : acc >= 70 ? 'une partie correcte avec quelques trous' : 'une partie où des erreurs ont coûté cher';
   out.push(`**Précision ${acc} %** : ${verdict}.`);
+  const est = review.elo?.[me];
+  if (est) {
+    const acpl = review.acpl?.[me];
+    const rating = game.myRating ? ` Ton classement au moment de la partie : ${game.myRating}.` : '';
+    out.push(`**Elo estimé sur cette partie : ≈ ${est}** (indicatif${acpl !== null && acpl !== undefined ? `, d’après ta perte moyenne de ${acpl} centipions par coup` : ''}).${rating}`);
+  }
+  // coups brillants, coups forts, occasions manquées (étiquettes du bilan)
+  const idx = (t, key) => d?.[key] || (review.tags || []).map((x, i) => (x === t && (i % 2 === 0) === (me === 'w') ? i : -1)).filter((i) => i >= 0);
+  const label = (i) => `${moveLabel(i)}${fig(sans[i] || '')}`;
+  const brilliant = idx('brilliant', 'brilliantIdx');
+  const great = idx('great', 'greatIdx');
+  const miss = idx('miss', 'missIdx');
+  if (brilliant.length) out.push(`💎 **${tagCount('brilliant', brilliant.length)}** : ${brilliant.slice(0, 3).map(label).join(', ')}. Un sacrifice juste, bravo ! Revois-le pour graver l’idée.`);
+  if (great.length) out.push(`**${tagCount('great', great.length)}** (le seul bon coup de la position) : ${great.slice(0, 4).map(label).join(', ')}.`);
+  if (miss.length) out.push(`✗ **${tagCount('miss', miss.length)}** : ${miss.slice(0, 4).map(label).join(', ')}. ${miss.length > 1 ? 'À chaque fois, ton' : 'Ton'} adversaire venait de se tromper et tu n’as pas puni : après chaque coup adverse, demande-toi « qu’est-ce qu’il vient de laisser ? ».`);
   const note = openingNote(sans, me);
   if (note) out.push('📖 ' + note);
   const errors = (d?.errors || []).filter((e) => e.cls !== 'inaccuracy');
@@ -55,7 +71,8 @@ export function gameSummaryLocal(game, review, sans) {
     const top = Object.entries(count).sort((a, b) => b[1] - a[1])[0];
     if (top) out.push(`**À retenir :** ${CATEGORIES[top[0]].tip}`);
   }
-  if (d && d.opportunities) out.push(`Ton adversaire t’a offert ${d.opportunities} occasion${d.opportunities > 1 ? 's' : ''} ; tu en as exploité ${d.converted}.`);
+  // (déjà dit plus haut s'il y a des occasions manquées)
+  if (d && d.opportunities && !miss.length) out.push(`Ton adversaire t’a offert ${d.opportunities} occasion${d.opportunities > 1 ? 's' : ''} ; tu en as exploité ${d.converted}.`);
   if (d && d.maxAdv >= 300 && d.score !== 1) out.push('Tu as eu une position gagnante (+3 ou plus) sans gagner : entraîne-toi à convertir (échanger les pièces, éliminer le contre-jeu).');
   return out;
 }
@@ -63,6 +80,22 @@ export function gameSummaryLocal(game, review, sans) {
 /** Bilan complet du joueur, rédigé sans IA. */
 export function profileReportLocal(ins, recs) {
   const out = [];
+  if (ins.estElo) {
+    const s = db();
+    const cc = s.ccRatings?.rapid?.rating || s.ccRatings?.blitz?.rating || s.profile.currentElo || null;
+    const diff = cc ? ins.estElo - cc : 0;
+    const cmp = !cc ? '' : diff >= 150 ? ` : c’est au-dessus de ton Elo chess.com (${cc}), tes résultats devraient suivre si tu restes régulier` : diff <= -150 ? ` : c’est sous ton Elo chess.com (${cc}), signe que quelques grosses gaffes plombent tes parties` : ` : c’est cohérent avec ton Elo chess.com (${cc})`;
+    out.push(`**Niveau de jeu estimé : ≈ ${ins.estElo}** (${ins.estEloN > 1 ? `médiane de tes ${ins.estEloN} dernières parties analysées` : 'd’après ta seule partie analysée'}, indicatif)${cmp}.`);
+    const goal = s.profile.goalElo;
+    if (goal && ins.estAcpl !== null && ins.estAcpl !== undefined && ins.estElo < goal) out.push(`Pour jouer au niveau ${goal}, il faut perdre en moyenne environ ${acplForElo(goal)} centipions par coup ; tu en es à ${ins.estAcpl}. Chaque gaffe évitée fait baisser ce chiffre très vite.`);
+  }
+  if (ins.brilliants || ins.greats || ins.misses) {
+    const parts = [];
+    if (ins.brilliants) parts.push(`💎 ${tagCount('brilliant', ins.brilliants)}`);
+    if (ins.greats) parts.push(tagCount('great', ins.greats));
+    if (ins.misses) parts.push(`✗ ${tagCount('miss', ins.misses)}`);
+    out.push(`Sur tes parties analysées : ${parts.join(', ')}.${ins.misses > ins.brilliants + ins.greats ? ' Les occasions manquées coûtent plus que ce que rapportent tes beaux coups : entraîne-toi à punir les erreurs adverses.' : ''}`);
+  }
   const known = SKILLS.filter((k) => ins.skills[k.id] !== null);
   if (known.length >= 3) {
     const sorted = [...known].sort((a, b) => ins.skills[b.id] - ins.skills[a.id]);
@@ -92,3 +125,6 @@ export function profileReportLocal(ins, recs) {
   out.push('- Semaine 4 : importe tes nouvelles parties, relance l’analyse et compare ton diagnostic : les priorités ont-elles baissé ?');
   return out;
 }
+
+/** Perte moyenne par coup (centipions) qui correspond à un Elo donné (inverse de la formule d'Elo estimé). */
+export const acplForElo = (elo) => Math.round(Math.log(3100 / elo) / 0.0116);

@@ -1,1 +1,56 @@
-/* Styles du module review-intel */
+/* Styles du module review-intel : coups brillants / forts / occasions manquées, Elo estimé */
+:root {
+  --ri-brilliant: #26c2a3;
+  --ri-great: #5b9bd5;
+  --ri-miss: #ff8a2b;
+}
+
+/* Elo estimé sous la précision */
+.ri-elo { font-size: 0.85rem; margin-top: 2px; white-space: nowrap; }
+.ri-elo b { font-size: 0.95rem; }
+.ri-help { margin: 2px 0 6px; color: var(--muted); }
+.ri-help summary { cursor: pointer; color: var(--muted); padding: 2px 0; }
+.ri-help p { color: var(--text); }
+.ri-help p.muted { color: var(--muted); }
+
+/* Badges d'étiquettes */
+.badge.ri-tag { border: 1px solid currentColor; }
+.badge.ri-tag b { font-weight: 800; letter-spacing: -0.5px; }
+.badge.ri-brilliant { color: var(--ri-brilliant); background: rgba(38, 194, 163, 0.12); }
+.badge.ri-great { color: var(--ri-great); background: rgba(91, 155, 213, 0.12); }
+.badge.ri-miss { color: var(--ri-miss); background: rgba(255, 138, 43, 0.12); }
+
+/* Symboles dans la liste des coups */
+.mv sup.ri-sup { font-weight: 800; margin-left: 1px; letter-spacing: -0.5px; }
+.mv sup.ri-brilliant { color: var(--ri-brilliant); }
+.mv sup.ri-great { color: var(--ri-great); }
+.mv sup.ri-miss { color: var(--ri-miss); }
+.mv.ri-mv-brilliant { color: var(--ri-brilliant); font-weight: 700; }
+
+/* Repères sur la courbe */
+.graph circle.ri-mk-brilliant { fill: var(--ri-brilliant); }
+.graph circle.ri-mk-great { fill: var(--ri-great); }
+
+/* Boutons de navigation */
+.btn.ri-btn-brilliant { color: var(--ri-brilliant); border-color: rgba(38, 194, 163, 0.5); }
+.btn.ri-btn-great b { color: var(--ri-great); font-weight: 800; }
+.ri-legacy { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+/* Panneau du coup */
+.ri-coach h4 { font-size: 0.95rem; margin: 10px 0 4px; }
+.ri-coach .coach-txt > h4:first-child { margin-top: 0; }
+.ri-coach.ri-is-brilliant { border-left-color: var(--ri-brilliant); }
+.ri-coach.ri-is-brilliant h4 { color: var(--ri-brilliant); }
+.ri-coach.ri-is-great { border-left-color: var(--ri-great); }
+.ri-coach.ri-is-great h4 { color: var(--ri-great); }
+.ri-coach.ri-is-miss { border-left-color: var(--ri-miss); }
+.ri-coach.ri-is-miss .coach-txt > h4:first-child { color: var(--ri-miss); }
+.ri-alt { border-top: 1px dashed var(--line); margin-top: 6px; padding-top: 4px; }
+
+/* Profil : niveau de jeu estimé */
+.ri-level-row { display: flex; gap: 8px 20px; align-items: flex-start; margin: 4px 0 6px; }
+.ri-level-row > div { min-width: 0; }
+.ri-level-row > div:first-child { flex: 1 1 0; }
+.ri-level-row > div + div { flex: 0 1 auto; max-width: 45%; }
+.ri-level-row .big { white-space: nowrap; }
+.ri-tags-line { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }

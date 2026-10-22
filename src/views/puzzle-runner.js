@@ -2,7 +2,7 @@
 import { Chess } from 'chess.js';
 import { createBoard, arrow } from '../board.js';
 import { getAnalysisEngine } from '../engine.js';
-import { playUci, uciOf, cgColor, cpWhite, colorName } from '../chessutil.js';
+import { playUci, uciOf, cgColor, cpWhite, colorName, uciToSan, fig } from '../chessutil.js';
 import { explainBest } from '../explain.js';
 import { promptBestMove } from '../prompts.js';
 import { md, esc, moveSound, sleep } from '../ui.js';
@@ -12,16 +12,23 @@ import { showCoach } from './coach-panel.js';
 /**
  * opts : fen, solution (UCI, coups alternés joueur/adversaire), prompt, hint, success,
  *        allowOthers (accepte tout coup aussi bon selon Stockfish), onResult(ok, firstTry), nextLabel, onNext
+ * Options facultatives (modes chronométrés : course, Woodpecker) :
+ *        compact (cache Indice / Solution / Pourquoi / Suivant),
+ *        strict (seulement la solution exacte ou un mat, sans vérification moteur),
+ *        onSolved() appelé dès la résolution (pour enchaîner),
+ *        onFail({ played, expected, shown }) appelé au premier mauvais coup : l'exercice s'arrête et montre
+ *        la solution 0,8 s ; `shown` est une promesse résolue à la fin de cet affichage.
  */
 export function runPuzzle(el, opts) {
-  const { fen, solution, prompt = '', hint = '', success = '', allowOthers = false } = opts;
+  const { fen, solution, prompt = '', hint = '', success = '', compact = false, strict = false } = opts;
+  const allowOthers = !!opts.allowOthers && !strict;
   const chess = new Chess(fen);
   const me = chess.turn();
   el.innerHTML = `
     <div class="puzzle-prompt"><span class="dot ${me}"></span><span>${md(prompt || `Trait aux ${colorName(me)} : trouve le meilleur coup.`)}</span></div>
     <div class="board-row"><div class="board-box"></div></div>
     <div class="feedback" aria-live="polite"></div>
-    <div class="actions">
+    <div class="actions"${compact ? ' hidden' : ''}>
       <button class="btn" data-a="hint">💡 Indice</button>
       <button class="btn" data-a="solution">👁 Solution</button>
       <button class="btn" data-a="explain" hidden>🤔 Pourquoi ?</button>
@@ -83,6 +90,7 @@ export function runPuzzle(el, opts) {
       }
     }
     firstTry = false;
+    if (opts.onFail) return failed(played, expected);
     feedback('✗ Ce n’est pas le meilleur coup. Réessaie !', 'ko');
     board.setShapes([arrow(played, 'red')]);
     await sleep(700);
@@ -95,8 +103,25 @@ export function runPuzzle(el, opts) {
   function solved(extra = '') {
     finished = true;
     board.setPosition(chess, { interactive: null });
-    feedback(`🎉 ${firstTry ? 'Trouvé du premier coup !' : 'Résolu.'} ${extra ? esc(extra) + ' ' : ''}${success ? md(success) : ''}`, 'ok');
+    if (compact) feedback(`✓ ${firstTry ? 'Trouvé !' : 'Résolu.'}${extra ? ' ' + esc(extra) : ''}`, 'ok');
+    else feedback(`🎉 ${firstTry ? 'Trouvé du premier coup !' : 'Résolu.'} ${extra ? esc(extra) + ' ' : ''}${success ? md(success) : ''}`, 'ok');
     done(true);
+    opts.onSolved?.();
+  }
+
+  /** Mode « une seule chance » : on montre ton coup (rouge) et la solution (vert) 0,8 s, puis on s'arrête. */
+  async function failed(played, expected) {
+    finished = true;
+    chess.undo();
+    board.setPosition(chess, { interactive: null });
+    board.setShapes(expected ? [arrow(played, 'red'), arrow(expected, 'green')] : [arrow(played, 'red')]);
+    feedback(expected ? `✗ Raté : il fallait jouer ${esc(fig(uciToSan(chess.fen(), expected)))}.` : '✗ Raté.', 'ko');
+    let release;
+    const shown = new Promise((r) => (release = r));
+    done(false);
+    opts.onFail({ played, expected, shown });
+    await sleep(800);
+    release();
   }
 
   function done(ok) {

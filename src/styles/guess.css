@@ -1,1 +1,74 @@
-/* Styles du module guess */
+/* Styles du module « Devine le coup » */
+
+/* ─── Couleurs des coups devinés ─── */
+:root { --g-exact: var(--c-best); --g-good: #a3cf6a; --g-ok: var(--c-inaccuracy); --g-miss: var(--c-mistake); }
+.mv.g-exact { color: var(--g-exact); font-weight: 700; }
+.mv.g-good { color: var(--g-good); font-weight: 700; }
+.mv.g-ok { color: var(--g-ok); font-weight: 700; }
+.mv.g-miss, .mv.g-skip { color: var(--g-miss); text-decoration: underline dotted; text-underline-offset: 3px; }
+b.g-exact { color: var(--g-exact); }
+b.g-good { color: var(--g-good); }
+b.g-ok { color: var(--g-ok); }
+b.g-miss { color: var(--g-miss); }
+
+/* ─── Liste des parties ─── */
+.guess-intro p, .guess-intro ul { margin: 4px 0; }
+.guess-group h2 { margin-bottom: 0; }
+.guess-group > p { margin: 2px 0 4px; }
+.guess-item { align-items: center; }
+.guess-item-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.guess-item-txt small { line-height: 1.3; overflow-wrap: anywhere; }
+.guess-best { flex: none; display: flex; flex-direction: column; align-items: center; min-width: 54px; }
+.guess-best b { font-size: 1.25rem; color: var(--accent); line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.guess-badge { font-size: 0.72rem; padding: 0 6px; color: var(--c-inaccuracy); margin-left: 2px; }
+
+/* ─── Choix du camp ─── */
+.guess-setup h2 { margin-bottom: 2px; }
+.guess-setup > p { overflow-wrap: anywhere; }
+.guess-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 10px; }
+.guess-side-btn {
+  display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 10px;
+  background: var(--card2); border: 2px solid var(--line); border-radius: 10px;
+  color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.guess-side-btn.on { border-color: var(--accent); background: #2f3a26; }
+.guess-side-btn .dot { margin-top: 3px; }
+.guess-side-txt { display: flex; flex-direction: column; min-width: 0; }
+.guess-side-txt small { font-size: 0.78rem; line-height: 1.3; overflow-wrap: anywhere; }
+.guess-tip { margin: 8px 0; }
+
+/* ─── Bandeau score / coup / réussite ─── */
+.guess-hud {
+  display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 6px; align-items: center;
+  background: var(--card); border-radius: var(--radius); padding: 6px 10px; margin: 2px 0 8px;
+}
+.guess-hud > div { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.guess-hud small { font-size: 0.72rem; }
+.guess-hud b { font-size: 1.2rem; line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.guess-score { color: var(--accent); }
+.guess-prompt { min-width: 0; overflow-wrap: anywhere; }
+
+/* ─── Retour après chaque coup ─── */
+.feedback.guess-ok { color: var(--g-ok); }
+.guess-actions .btn:disabled { opacity: 0.45; }
+.guess-coach { padding-block: 8px; }
+.guess-entry + .guess-entry { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+.guess-entry .coach-title { margin-bottom: 2px; align-items: baseline; }
+.guess-entry p { margin: 2px 0; }
+.guess-moves-card { padding-block: 8px; }
+.guess-moves { max-height: 128px; }
+
+/* ─── Fin de partie ─── */
+.guess-end { text-align: center; padding-block: 14px; }
+.guess-final { font-size: 2.4rem; font-weight: 800; line-height: 1.1; color: var(--accent); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.guess-final small { font-size: 0.95rem; font-weight: 600; color: var(--muted); }
+.guess-final-pct { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.guess-record { margin: 6px 0 10px; font-weight: 700; color: var(--c-inaccuracy); }
+.guess-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 6px 0 10px; }
+.guess-stats > div { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.guess-stats b { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.guess-stats small { font-size: 0.72rem; line-height: 1.2; }
+.guess-end h2 { margin: 14px 0 4px; text-align: left; }
+.guess-missed { text-align: left; }
+.guess-end .actions { margin-top: 12px; }
+.guess-pov { margin: -4px 0 8px; }

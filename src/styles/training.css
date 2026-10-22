@@ -1,1 +1,74 @@
-/* Styles du module training */
+/* Styles du module training : course contre la montre et méthode Woodpecker */
+
+/* ─── Commun ─── */
+.tr-intro p { margin: 0; }
+.tr-sol { margin-top: 4px; }
+.tr-sol p { margin: 4px 0; }
+.tr-sol ul { margin: 4px 0; }
+.tr-line { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+/* ─── Course : choix du mode ─── */
+.rush-modes { display: flex; flex-direction: column; }
+.rush-mode {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  border: 1px solid var(--line); color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.rush-mode:active { transform: scale(0.98); }
+.rush-mode-icon { font-size: 1.6rem; width: 2rem; text-align: center; flex: none; color: var(--accent); }
+.rush-mode-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rush-mode-txt b { font-size: 1.05rem; }
+.rush-mode-best { flex: none; display: flex; flex-direction: column; align-items: center; min-width: 54px; }
+.rush-mode-best b { font-size: 1.4rem; color: var(--accent); line-height: 1.1; font-variant-numeric: tabular-nums; }
+
+/* ─── Course : bandeau chrono / score / erreurs ─── */
+.rush-hud {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; gap: 6px;
+  background: var(--card); border-radius: var(--radius); padding: 6px 10px; margin: 2px 0 6px;
+}
+.rush-hud > div { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.rush-hud small { font-size: 0.72rem; }
+.rush-clock b, .rush-score b { font-size: 1.5rem; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.rush-score b { color: var(--accent); }
+.rush-clock.hurry b { color: var(--danger); animation: pulse 0.5s infinite alternate; }
+.rush-score.bump b { animation: rush-bump 0.35s ease-out; }
+@keyframes rush-bump { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+.rush-lives { flex-direction: row !important; justify-content: center; gap: 6px; }
+.rush-life { font-size: 1.35rem; line-height: 1; color: var(--danger); width: 1.2em; text-align: center; }
+.rush-life.lost { color: var(--muted); font-weight: 700; animation: rush-lost 0.4s ease-out; }
+@keyframes rush-lost { 0% { transform: scale(1.6); color: var(--danger); } 100% { transform: scale(1); } }
+.rush-timebar { height: 5px; background: var(--bg2); border-radius: 3px; overflow: hidden; margin: 0 0 6px; }
+.rush-timebar > div { height: 100%; width: 100%; background: var(--accent); transition: width 0.2s linear; }
+.rush-foot { margin-top: 0; }
+
+/* ─── Course : bilan ─── */
+.rush-end { padding-block: 16px; }
+.rush-final { font-size: 3.4rem; font-weight: 800; line-height: 1.05; color: var(--accent); font-variant-numeric: tabular-nums; margin-top: 4px; }
+.rush-record { margin-top: 8px; font-weight: 700; color: var(--c-inaccuracy); }
+.rush-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
+.rush-stats > div { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.rush-stats b { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.rush-stats small { font-size: 0.72rem; line-height: 1.2; }
+.rush-tip { margin-bottom: 0; }
+.rush-miss > span:first-child { flex: 1; min-width: 0; }
+.rush-miss .btn { flex: none; pointer-events: none; }
+.rush-again { margin: 10px 0; }
+
+/* ─── Woodpecker ─── */
+.wp-intro h2 { margin-bottom: 4px; }
+.wp-status h2, .wp-done h2 { margin: 0; }
+.wp-done .rush-stats { margin: 10px 0; }
+.wp-how summary { cursor: pointer; padding: 2px 0; }
+.wp-how[open] summary { margin-bottom: 6px; }
+.wp-table td:first-child { white-space: nowrap; }
+.wp-hud {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  background: var(--card); border-radius: var(--radius); padding: 6px 8px; margin: 2px 0 4px;
+}
+.wp-hud > div { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.wp-hud small { font-size: 0.72rem; }
+.wp-hud b { font-size: 1.15rem; line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wp-progress { height: 6px; margin: 4px 0; }
+.wp-goal { text-align: center; }
+.wp-goal.over { color: var(--c-mistake); }
+.wp-paused { padding-block: 24px; }
+.wp-foot { margin-top: 4px; }
