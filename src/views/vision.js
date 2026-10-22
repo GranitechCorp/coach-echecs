@@ -2,7 +2,7 @@
 // Inspiré du « Coordinate trainer » de Lichess et de « Vision » de chess.com, en français et plus complet :
 // manches de 30 s, cases difficiles qui reviennent plus souvent, notation française, cavalier, visualisation.
 import { Chess, SQUARES } from 'chess.js';
-import { db, update } from '../storage.js';
+import { db, update, dayOf, today } from '../storage.js';
 import { setTitle, esc, md, moveSound } from '../ui.js';
 import { createBoard, arrow } from '../board.js';
 import { fenFromMoves, START_FEN, theName, aName, uciOf, cgColor, colorName } from '../chessutil.js';
@@ -28,7 +28,7 @@ const shuffle = (arr) => {
   }
   return arr;
 };
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const todayKey = today;
 const fmt1 = (x) => x.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 const plural = (n, one, many = one + 's') => `${n} ${n > 1 ? many : one}`;
 const sideLabel = (or) => ({ w: 'Blancs', b: 'Noirs', r: 'au hasard' })[or] || '';
@@ -153,7 +153,7 @@ export function visionStats() {
   const today = todayKey();
   const bestFind = Math.max(0, best['find-w'] || 0, best['find-b'] || 0, best['find-r'] || 0);
   return {
-    today: (v.sessions || []).filter((s) => s.date?.slice(0, 10) === today).length,
+    today: (v.sessions || []).filter((s) => s.date && dayOf(s.date) === today).length,
     bestFind,
     level: bestFind < 12 ? 'débutant' : bestFind < 22 ? 'en progrès' : 'solide',
     dailyDone: v.daily === today,

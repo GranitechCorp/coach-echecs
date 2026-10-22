@@ -94,16 +94,29 @@ export function resetAll() {
   save();
 }
 
+/**
+ * Jour (AAAA-MM-JJ) à l'heure du téléphone, pas en UTC : en France, une séance faite à minuit et demi
+ * compte pour le bon jour. Accepte un horodatage ISO, des millisecondes ou une date déjà au format jour.
+ */
+export function dayOf(t = Date.now()) {
+  if (typeof t === 'string' && t.length === 10) return t;
+  const d = new Date(t);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+export const today = () => dayOf();
+/** Vrai si la date (ISO ou millisecondes) tombe aujourd'hui, à l'heure du téléphone. */
+export const isToday = (t) => !!t && dayOf(t) === today();
+
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 /** Marque l'activité du jour (série de jours consécutifs). */
 export function touchStreak() {
   update((s) => {
-    const today = new Date().toISOString().slice(0, 10);
-    if (s.streak.last === today) return;
-    const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const t = today();
+    if (s.streak.last === t) return;
+    const y = dayOf(Date.now() - 86400000);
     s.streak.days = s.streak.last === y ? s.streak.days + 1 : 1;
-    s.streak.last = today;
+    s.streak.last = t;
   });
 }
 

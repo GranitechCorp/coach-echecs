@@ -2,7 +2,7 @@
 // (le « Solitaire chess » de Bruce Pandolfini, « Logical Chess Move by Move » d'Irving Chernev).
 // Coup exact = 5 points ; sinon Stockfish compare ton coup à celui de la partie : aussi bon = 3, jouable = 1.
 import { Chess } from 'chess.js';
-import { db, update } from '../storage.js';
+import { db, update, today } from '../storage.js';
 import { setTitle, esc, md, moveSound, sleep } from '../ui.js';
 import { createBoard, arrow } from '../board.js';
 import { getAnalysisEngine } from '../engine.js';
@@ -57,7 +57,7 @@ function progressOf(g) {
 /** Coups devinés aujourd'hui (pour cocher « Devine le coup » dans le programme du jour). */
 function countToday({ finished = false } = {}) {
   update((d) => {
-    const t = new Date().toISOString().slice(0, 10);
+    const t = today();
     const g = d.guessDay?.date === t ? d.guessDay : { date: t, n: 0 };
     if (finished) g.finished = true;
     else g.n++;

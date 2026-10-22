@@ -1,6 +1,6 @@
 // Partie contre l'ordinateur : indices, « pourquoi ? », coach en direct, reprise de coup.
 import { Chess } from 'chess.js';
-import { db, update, uid } from '../storage.js';
+import { db, update, uid, today } from '../storage.js';
 import { setTitle, toast, esc, md, evalBarHtml, setEvalBar, moveListHtml, classBadge, confirmDialog, moveSound, sleep } from '../ui.js';
 import { createBoard, arrow } from '../board.js';
 import { getBotEngine, getAnalysisEngine } from '../engine.js';
@@ -254,7 +254,7 @@ export function render(root) {
     const pgnGame = new Chess(g.startFen);
     for (const u of g.moves) playUci(pgnGame, u);
     pgnGame.setHeader('Event', 'Coach Échecs');
-    pgnGame.setHeader('Date', new Date().toISOString().slice(0, 10).replace(/-/g, '.'));
+    pgnGame.setHeader('Date', today().replace(/-/g, '.'));
     pgnGame.setHeader('White', g.userColor === 'w' ? 'Moi' : `Stockfish ${g.elo}`);
     pgnGame.setHeader('Black', g.userColor === 'b' ? 'Moi' : `Stockfish ${g.elo}`);
     pgnGame.setHeader('Result', result);

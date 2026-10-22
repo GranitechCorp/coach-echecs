@@ -1,4 +1,4 @@
-import { db, update, exportData, importData, resetAll } from '../storage.js';
+import { db, update, exportData, importData, resetAll, today } from '../storage.js';
 import { setTitle, esc, toast, confirmDialog, md } from '../ui.js';
 import { MODELS, askCoach, inClaudeViewer } from '../coach-ai.js';
 
@@ -89,7 +89,7 @@ export function render(root) {
     toast('Enregistré ✓');
   };
   root.querySelector('#export').onclick = async () => {
-    const filename = `coach-echecs-${new Date().toISOString().slice(0, 10)}.json`;
+    const filename = `coach-echecs-${today()}.json`;
     if (inClaudeViewer()) {
       const downloads = await window.claude.use('downloads');
       if (!downloads) return toast('Export indisponible ici.');

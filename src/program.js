@@ -1,5 +1,5 @@
 // Programme personnalisé sur 7 jours, construit à partir du diagnostic (insights.js).
-import { db, update } from './storage.js';
+import { db, update, dayOf, today } from './storage.js';
 import { LESSONS } from './data/lessons.js';
 import { OPENING_LINES } from './data/openings.js';
 import { linesForFamily, lessonTitle } from './insights.js';
@@ -8,9 +8,10 @@ import { THEME_LABELS } from './data/themes.js';
 import { visionStats } from './views/vision.js';
 import { rushStats } from './views/rush.js';
 import { woodpeckerStatus } from './views/woodpecker.js';
+import { blunderStats } from './views/blunder.js';
 
-const today = () => new Date().toISOString().slice(0, 10);
-const dayKey = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+const dayKey = (offset) => dayOf(Date.now() + offset * 86400000);
+const onDay = (d, t) => !!d && dayOf(d) === t;
 
 function nearestLevel(elo) {
   return LEVELS.reduce((a, l) => (Math.abs(l.elo - elo) < Math.abs(a.elo - elo) ? l : a)).elo;
@@ -30,6 +31,8 @@ export function buildProgram(ins) {
   const vision = visionStats();
   const visionWeak = vision.level !== 'solide';
   const wood = woodpeckerStatus();
+  // pièces laissées en prise : la cause n°1 des défaites sous 1200 ; sans parties analysées, on suppose que oui
+  const blunderWeak = !ins.analysed || (ins.bpg ?? 0) >= 1 || W.some((w) => ['piece-en-prise', 'blunders'].includes(w.id));
 
   // leçons : repérage d'abord si la vision est faible, puis celles liées à tes faiblesses, puis le programme normal
   const lessonQueue = [];
@@ -70,19 +73,20 @@ export function buildProgram(ins) {
   const rushItem = { type: 'rush', count: 2, label: '2 courses contre la montre', why: 'Le coup d’œil tactique' };
   const playItem = { type: 'play', elo: level, label: `1 partie contre l’ordinateur ${level}` };
   const selfItem = { type: 'selfreview', label: 'Auto-analyse de ta dernière partie, puis son bilan Stockfish', why: 'Apprendre à trouver tes erreurs tout seul' };
+  const blunderItem = { type: 'blunder', count: 10, label: 'Anti-gaffe : 10 positions « Sûr ou gaffe ? »', why: 'Vérifier chaque coup avant de le jouer' };
   const guessItem = { type: 'guess', label: 'Devine le coup : au moins 10 coups d’une partie modèle', why: 'Comprendre les plans des bons joueurs' };
 
   const plan = [
-    [visionWeak && visionItem, tactics(10), mistakes, lesson()],
-    [visionWeak && visionItem, woodItem, opening(), playItem],
-    [visionWeak && visionItem, tactics(10), mistakes, lesson(), selfItem],
-    [visionWeak && visionItem, rushItem, opening(), playItem],
-    [visionWeak && visionItem, tactics(10), mistakes, lesson(), guessItem],
-    [visionWeak && visionItem, woodItem, opening(), playItem, selfItem],
+    [visionWeak && visionItem, blunderItem, tactics(10), mistakes, lesson()],
+    [visionWeak && visionItem, blunderWeak && blunderItem, woodItem, opening(), playItem],
+    [visionWeak && visionItem, blunderItem, tactics(10), mistakes, lesson(), selfItem],
+    [visionWeak && visionItem, blunderWeak && blunderItem, rushItem, opening(), playItem],
+    [visionWeak && visionItem, blunderItem, tactics(10), mistakes, lesson(), guessItem],
+    [visionWeak && visionItem, blunderWeak && blunderItem, woodItem, opening(), playItem, selfItem],
     [rushItem, tactics(15), guessItem, { type: 'analyze', label: 'Bilan de la semaine : synchronise chess.com, analyse tes parties et génère un nouveau programme' }],
   ];
   const days = plan.map((items, d) => ({ date: dayKey(d), items: items.filter(Boolean) }));
-  const focus = [...(visionWeak ? ['Vision de l’échiquier'] : []), ...W.map((w) => w.title)];
+  const focus = [...(visionWeak ? ['Vision de l’échiquier'] : []), ...(blunderWeak && !W.some((w) => ['piece-en-prise', 'blunders'].includes(w.id)) ? ['Ne plus laisser de pièces en prise'] : []), ...W.map((w) => w.title)];
   const program = { created: new Date().toISOString(), focus, days };
   update((x) => (x.program = program));
   return program;
@@ -102,19 +106,19 @@ export function isDone(item) {
   const t = today();
   switch (item.type) {
     case 'puzzles': {
-      const h = s.puzzles.history.filter((x) => x.date?.startsWith(t) && ['lichess', 'rush', 'woodpecker'].includes(x.kind) && (item.theme === 'mix' || x.theme === item.theme));
+      const h = s.puzzles.history.filter((x) => onDay(x.date, t) && ['lichess', 'rush', 'woodpecker'].includes(x.kind) && (item.theme === 'mix' || x.theme === item.theme));
       return h.length >= item.count;
     }
     case 'mistakes':
-      return !s.mistakes.some((m) => m.due <= Date.now()) || s.puzzles.history.filter((x) => x.date?.startsWith(t) && x.kind === 'mistake').length >= 5;
+      return !s.mistakes.some((m) => m.due <= Date.now()) || s.puzzles.history.filter((x) => onDay(x.date, t) && x.kind === 'mistake').length >= 5;
     case 'lesson':
-      return !!s.lessons[item.id]?.date?.startsWith(t);
+      return !!onDay(s.lessons[item.id]?.date, t);
     case 'opening':
-      return !!s.openings[item.lineId]?.last?.startsWith(t);
+      return !!onDay(s.openings[item.lineId]?.last, t);
     case 'play':
-      return s.games.some((g) => g.source === 'bot' && g.date?.startsWith(t));
+      return s.games.some((g) => g.source === 'bot' && onDay(g.date, t));
     case 'analyze':
-      return new Date(s.sync?.at || 0).toISOString().startsWith(t);
+      return onDay(s.sync?.at, t);
     case 'vision': {
       const v = visionStats();
       return v.dailyDone || v.today >= 3;
@@ -123,12 +127,14 @@ export function isDone(item) {
       return rushStats().today.runs >= (item.count || 1);
     case 'woodpecker':
       // au moins 10 exercices du lot aujourd'hui (ou un cycle bouclé) : ouvrir la page ne suffit pas
-      return s.puzzles.history.filter((x) => x.date?.startsWith(t) && x.kind === 'woodpecker').length >= 10 || !!s.woodpecker?.cycles?.some((c) => c.finishedAt?.startsWith(t));
+      return s.puzzles.history.filter((x) => onDay(x.date, t) && x.kind === 'woodpecker').length >= 10 || !!s.woodpecker?.cycles?.some((c) => onDay(c.finishedAt, t));
     case 'selfreview':
-      return Object.values(s.selfReviews || {}).some((r) => r.date?.startsWith(t));
+      return Object.values(s.selfReviews || {}).some((r) => onDay(r.date, t));
     case 'guess':
       // au moins 10 coups devinés aujourd'hui, ou une partie modèle terminée
       return s.guessDay?.date === t && (s.guessDay.n >= 10 || !!s.guessDay.finished);
+    case 'blunder':
+      return blunderStats().today >= (item.count || 10);
     default:
       return false;
   }
@@ -163,6 +169,8 @@ export function itemHref(item) {
       return '#/woodpecker';
     case 'guess':
       return '#/guess';
+    case 'blunder':
+      return '#/gaffe';
     case 'selfreview': {
       const g = lastGameToSelfReview();
       return g ? `#/selfreview/${g.id}` : '#/play';

@@ -1,7 +1,7 @@
 // Course contre la montre (comme Puzzle Rush / Puzzle Storm) : un maximum d'exercices, de plus en plus durs,
 // 3 erreurs et c'est fini. Exercices tirés de la banque intégrée (fonctionne hors ligne).
 import { Chess } from 'chess.js';
-import { db, update } from '../storage.js';
+import { db, update, dayOf, today, isToday } from '../storage.js';
 import { setTitle, esc, md, confirmDialog, sleep } from '../ui.js';
 import { createBoard, arrow } from '../board.js';
 import { runPuzzle } from './puzzle-runner.js';
@@ -20,7 +20,6 @@ const MODES = {
 const MAX_ERRORS = 3;
 const NEXT_DELAY = 300; // enchaînement automatique après une réussite
 
-const today = () => new Date().toISOString().slice(0, 10);
 
 // ─── Outils partagés avec la méthode Woodpecker ───
 
@@ -222,7 +221,7 @@ export function rushStats() {
   const r = db().rush || {};
   const best = { ...emptyRush().best, ...(r.best || {}) };
   const t = today();
-  const todays = (r.history || []).filter((h) => h.date?.startsWith(t));
+  const todays = (r.history || []).filter((h) => h.date && dayOf(h.date) === t);
   return {
     best,
     today: { runs: todays.length, best: todays.reduce((m, h) => Math.max(m, h.score), 0), solved: todays.reduce((n, h) => n + h.score, 0) },
@@ -566,7 +565,7 @@ const topLevel = (R) => R.solved.reduce((m, p) => Math.max(m, p.rating), 0);
 
 function dayLabel(iso) {
   if (!iso) return '';
-  if (iso.startsWith(today())) return 'aujourd’hui';
+  if (isToday(iso)) return 'aujourd’hui';
   try {
     return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   } catch {

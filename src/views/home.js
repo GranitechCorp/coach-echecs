@@ -1,4 +1,4 @@
-import { db } from '../storage.js';
+import { db, isToday } from '../storage.js';
 import { setTitle, esc } from '../ui.js';
 import { LESSONS, MODULES } from '../data/lessons.js';
 import { todayItems, isDone, itemHref } from '../program.js';
@@ -7,7 +7,6 @@ import { computeInsights, filterGames } from '../insights.js';
 
 export const tab = 'home';
 
-const today = () => new Date().toISOString().slice(0, 10);
 
 export function estimatedLevel(s) {
   const wins = Object.entries(s.botResults)
@@ -36,10 +35,9 @@ export function render(root) {
   const onSynced = () => root.isConnected && render(root);
   document.addEventListener('games-synced', onSynced, { once: true });
   const s = db();
-  const t = today();
-  const puzzlesToday = s.puzzles.history.filter((h) => h.date?.startsWith(t)).length;
-  const gamesToday = s.games.filter((g) => g.date?.startsWith(t)).length;
-  const studiedToday = Object.values(s.lessons).some((l) => l.date?.startsWith(t)) || Object.values(s.openings).some((o) => o.last?.startsWith(t));
+  const puzzlesToday = s.puzzles.history.filter((h) => isToday(h.date)).length;
+  const gamesToday = s.games.filter((g) => isToday(g.date)).length;
+  const studiedToday = Object.values(s.lessons).some((l) => isToday(l.date)) || Object.values(s.openings).some((o) => isToday(o.last));
   const due = s.mistakes.filter((m) => m.due <= Date.now()).length;
   const ccElo = s.ccRatings?.rapid?.rating || s.ccRatings?.blitz?.rating || null;
   const level = ccElo || estimatedLevel(s);

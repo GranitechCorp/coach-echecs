@@ -7,6 +7,7 @@ import './styles/training.css';
 import './styles/guess.css';
 import './styles/self-review.css';
 import './styles/review-intel.css';
+import './styles/blunder.css';
 
 import { load, touchStreak, update } from './storage.js';
 import * as home from './views/home.js';
@@ -27,6 +28,7 @@ import * as rush from './views/rush.js';
 import * as woodpecker from './views/woodpecker.js';
 import * as selfReview from './views/self-review.js';
 import * as guess from './views/guess.js';
+import * as blunder from './views/blunder.js';
 import { autoSync } from './chesscom.js';
 
 const routes = [
@@ -48,6 +50,7 @@ const routes = [
   [/^#\/woodpecker$/, woodpecker],
   [/^#\/selfreview\/([\w-]+)$/, selfReview],
   [/^#\/guess(?:\/([\w-]+))?$/, guess],
+  [/^#\/gaffe(?:\/(\w+))?$/, blunder],
 ];
 
 const app = document.getElementById('app');
@@ -69,13 +72,6 @@ function route() {
     for (const a of document.querySelectorAll('#tabbar a')) a.classList.toggle('active', a.dataset.tab === view.tab);
     window.scrollTo(0, 0);
     cleanup = view.render(app, ...m.slice(1).map((x) => (x ? decodeURIComponent(x) : x))) || null;
-    const name = h.split('/')[1];
-    if (name === 'guess' || name === 'woodpecker') {
-      update((d) => {
-        d.lastVisit ||= {};
-        d.lastVisit[name] = new Date().toISOString().slice(0, 10);
-      });
-    }
     return;
   }
   location.hash = '#/';

@@ -1,6 +1,6 @@
 // « Progrès » : synchro chess.com, analyse de toutes tes parties, diagnostic, priorités,
 // programme de la semaine, évolution, ouvertures et conseils personnalisés.
-import { db, update } from '../storage.js';
+import { db, update, today } from '../storage.js';
 import { setTitle, esc, md, toast } from '../ui.js';
 import { syncChesscom, TIME_FR } from '../chesscom.js';
 import { analyzeMany, REVIEW_VERSION } from '../analyzer.js';
@@ -110,7 +110,7 @@ export function render(root) {
         <div class="row between"><h2>Ton programme de la semaine</h2>${progFresh ? '<button class="btn ghost small" id="regen">Regénérer</button>' : ''}</div>
         ${progFresh ? `${prog.focus?.length ? `<p class="small muted">Axes de travail : ${prog.focus.map(esc).join(' · ')}</p>` : ''}
           ${prog.days.map((d) => {
-            const isToday = d.date === new Date().toISOString().slice(0, 10);
+            const isToday = d.date === today();
             const label = cap(new Date(d.date + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }));
             return `<details class="day" ${isToday ? 'open' : ''}><summary>${isToday ? '<b>Aujourd’hui</b>' : esc(label)}</summary>
               ${d.items.map((it) => `<a class="todo ${isToday && isDone(it) ? 'done' : ''}" href="${itemHref(it)}"><span class="check"></span><span>${esc(it.label)}${it.why ? `<br/><small class="muted">pour : ${esc(it.why)}</small>` : ''}</span></a>`).join('')}
