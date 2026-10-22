@@ -9,16 +9,12 @@ export function render(root) {
   const s = db();
   root.innerHTML = `
     <section class="card">
-      <h2>✨ Coach IA (Claude) — facultatif</h2>
-      <label class="switch"><input type="checkbox" id="ai-on" ${s.settings.aiEnabled ? 'checked' : ''}/> Afficher les boutons ✨ du coach IA</label>
-      <p class="small muted">Désactivé, l’appli fonctionne à 100 % en local : Stockfish analyse, et les explications, bilans, diagnostic et programme sont rédigés par l’appli elle-même. Claude n’est jamais utilisé tant que tu n’appuies pas sur un bouton ✨.</p>
-      ${inClaudeViewer() ? '<p class="small"><b>Tu utilises l’appli dans claude.ai : le coach IA passe par ton compte Claude, aucune clé n’est nécessaire.</b> La première fois, claude.ai te demande l’autorisation. Laisse le champ ci-dessous vide.</p>' : ''}
-      <p class="small">Facultatif : sans clé, l’appli explique déjà les coups avec Stockfish et ses propres règles. Avec une clé API Claude, tu obtiens en plus des explications rédigées par un vrai coach, des bilans de partie et des réponses à tes questions.</p>
-      <p class="small muted">Crée une clé sur <b>console.anthropic.com</b> → « API Keys ». La clé reste sur ton téléphone et n’est envoyée qu’à api.anthropic.com. Mets une limite de dépense mensuelle dans la console pour garder le contrôle.</p>
-      <label>Clé API<input id="key" type="password" placeholder="sk-ant-…" value="${esc(s.settings.apiKey)}" autocomplete="off"/></label>
-      <label>Modèle<select id="model">${MODELS.map((m) => `<option value="${m.id}" ${m.id === s.settings.model ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select></label>
-      <div class="row"><button class="btn primary" id="save-key">Enregistrer</button><button class="btn" id="test">Tester</button></div>
-      <div id="test-out"></div>
+      <h2>Repérage sur l’échiquier</h2>
+      <label class="switch"><input type="checkbox" id="sq-names" ${s.settings.squareNames !== false ? 'checked' : ''}/> Afficher le nom de la case que je touche</label>
+      <p class="small muted">Sur tous les échiquiers, une petite étiquette (« e4 ») apparaît une seconde au-dessus de la case touchée.</p>
+      <label class="switch"><input type="checkbox" id="sq-coords" ${s.settings.coordsOnSquares === true ? 'checked' : ''}/> Écrire les coordonnées dans toutes les cases</label>
+      <p class="small muted">Pratique au début pour lire les coups. Désactive-le dès que tu te sens prêt : le but est de t’en passer.</p>
+      <a class="btn block" href="#/vision">👁 S’entraîner à repérer les cases</a>
     </section>
     <section class="card">
       <h2>Profil</h2>
@@ -29,12 +25,16 @@ export function render(root) {
       <button class="btn" id="save-profile">Enregistrer</button>
     </section>
     <section class="card">
-      <h2>Repérage sur l’échiquier</h2>
-      <label class="switch"><input type="checkbox" id="sq-names" ${s.settings.squareNames !== false ? 'checked' : ''}/> Afficher le nom de la case que je touche</label>
-      <p class="small muted">Sur tous les échiquiers, une petite étiquette (« e4 ») apparaît une seconde au-dessus de la case touchée.</p>
-      <label class="switch"><input type="checkbox" id="sq-coords" ${s.settings.coordsOnSquares === true ? 'checked' : ''}/> Écrire les coordonnées dans toutes les cases</label>
-      <p class="small muted">Pratique au début pour lire les coups. Désactive-le dès que tu te sens prêt : le but est de t’en passer.</p>
-      <a class="btn block" href="#/vision">👁 S’entraîner à repérer les cases</a>
+      <h2>✨ Coach IA (Claude) — facultatif</h2>
+      <label class="switch"><input type="checkbox" id="ai-on" ${s.settings.aiEnabled ? 'checked' : ''}/> Afficher les boutons ✨ du coach IA</label>
+      <p class="small muted">Désactivé, l’appli fonctionne à 100 % en local : Stockfish analyse, et les explications, bilans, diagnostic et programme sont rédigés par l’appli elle-même. Claude n’est jamais utilisé tant que tu n’appuies pas sur un bouton ✨.</p>
+      ${inClaudeViewer() ? '<p class="small"><b>Tu utilises l’appli dans claude.ai : le coach IA passe par ton compte Claude, aucune clé n’est nécessaire.</b> La première fois, claude.ai te demande l’autorisation. Laisse le champ ci-dessous vide.</p>' : ''}
+      <p class="small">Facultatif : sans clé, l’appli explique déjà les coups avec Stockfish et ses propres règles. Avec une clé API Claude, tu obtiens en plus des explications rédigées par un vrai coach, des bilans de partie et des réponses à tes questions.</p>
+      <p class="small muted">Crée une clé sur <b>console.anthropic.com</b> → « API Keys ». La clé reste sur ton téléphone et n’est envoyée qu’à api.anthropic.com. Mets une limite de dépense mensuelle dans la console pour garder le contrôle.</p>
+      <label>Clé API<input id="key" type="password" placeholder="sk-ant-…" value="${esc(s.settings.apiKey)}" autocomplete="off"/></label>
+      <label>Modèle<select id="model">${MODELS.map((m) => `<option value="${m.id}" ${m.id === s.settings.model ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select></label>
+      <div class="row"><button class="btn primary" id="save-key">Enregistrer</button><button class="btn" id="test">Tester</button></div>
+      <div id="test-out"></div>
     </section>
     <section class="card">
       <h2>Sauvegarde</h2>

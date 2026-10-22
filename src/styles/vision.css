@@ -14,7 +14,7 @@
 
 /* coordonnées écrites dans chaque case (réglage « coordsOnSquares ») */
 /* au-dessus des pièces (sinon la tour ou la dame cachent « a8 », « d8 »…), petites et dans le coin */
-.cg-wrap coords.squares { z-index: 3; text-transform: lowercase; font-size: 9px; font-weight: 700; opacity: 0.9; }
+.cg-wrap coords.squares { z-index: 3; text-transform: lowercase; font-size: 10px; font-weight: 700; opacity: 0.85; }
 .cg-wrap coords.squares coord { padding: 1px 3px; }
 
 /* ─── Accueil Vision ─── */

@@ -118,6 +118,7 @@ async function checkLessons() {
         counts.square++;
         if (!Array.isArray(step.targets) || !step.targets.length) fail(`${lesson.id} (étape ${k + 1}) : aucune case à trouver`);
         else for (const t of step.targets) if (!SQUARE.test(t)) fail(`${lesson.id} (étape ${k + 1}) : nom de case invalide « ${t} »`);
+        if (Array.isArray(step.targets) && new Set(step.targets).size !== step.targets.length) fail(`${lesson.id} (étape ${k + 1}) : case demandée deux fois`);
         if (step.orientation && !['white', 'black'].includes(step.orientation)) fail(`${lesson.id} (étape ${k + 1}) : orientation invalide ${step.orientation}`);
       }
       let c;
@@ -143,6 +144,7 @@ async function checkLessons() {
         const sc = await startScore(c);
         if (!['mate', 'promote', 'draw'].includes(goal)) fail(`${lesson.id} (étape ${k + 1}) : objectif inconnu ${goal}`);
         else if (c.isGameOver()) fail(`${lesson.id} (étape ${k + 1}) : la partie est déjà finie`);
+        else if (goal === 'promote' && !c.findPiece({ type: 'p', color: c.turn() }).length) fail(`${lesson.id} (étape ${k + 1}) : 'promote' sans pion à pousser`);
         else if (goal === 'draw') {
           // tenir la nulle : la position de départ doit être tenable (évaluation proche de 0)
           if (!step.maxMoves) fail(`${lesson.id} (étape ${k + 1}) : 'draw' sans maxMoves`);
@@ -197,8 +199,12 @@ async function checkLessons() {
             // dans une position déjà gagnante, l'évaluation varie d'une analyse à l'autre : tolérance de 20 %
             const tol = Math.max(40, bs >= 300 && mine >= 300 ? bs * 0.2 : 0);
             if (best.pv[0] !== uci && bs - mine > tol && !(bs > 9000 && mine > 9000)) fail(`${lesson.id} : ${uci} n'est pas le meilleur (${mine} contre ${bs} pour ${best.pv[0]}) — ${fen}`);
-            if (!step.allowOthers && second && i === 0 && scoreOf(second) > bs - 120 && !(bs > 9000 && scoreOf(second) < 9000) && bs < 9000) {
-              console.log(`    ⚠ ${lesson.id} : solution non unique (${best.pv[0]} ${bs} / ${second.pv[0]} ${scoreOf(second)}) — ${fen}`);
+            const close = (l1, l2) => scoreOf(l2) > scoreOf(l1) - 120 && !(scoreOf(l1) > 9000 && scoreOf(l2) < 9000) && scoreOf(l1) < 9000;
+            if (!step.allowOthers && second && i === 0 && close(best, second)) {
+              // à la limite (un pion d'écart environ), l'évaluation varie d'une analyse à l'autre : on confirme plus profond
+              const deeper = await engine.analyse(fen, { depth: DEPTH + 4, multipv: 2 });
+              if (deeper[1] && close(deeper[0], deeper[1]))
+                console.log(`    ⚠ ${lesson.id} : solution non unique (${deeper[0].pv[0]} ${scoreOf(deeper[0])} / ${deeper[1].pv[0]} ${scoreOf(deeper[1])}) — ${fen}`);
             }
           } else {
             // coup de l'adversaire joué automatiquement : il doit être une défense raisonnable, sinon l'exercice montre
@@ -214,7 +220,8 @@ async function checkLessons() {
             if (best && reply && best.pv[0] !== uci) {
               const after = c2.isCheckmate() ? -10000 : c2.isGameOver() ? 0 : -scoreOf((await engine.analyse(c2.fen(), { depth: DEPTH }))[0]);
               const bs = scoreOf(best);
-              if (bs - after > 150 && !(bs < -9000 && after < -9000))
+              // (sauf si même la meilleure défense est perdue de plus de 5 pions : le choix de la défense ne change rien)
+              if (bs - after > 150 && bs > -500)
                 console.log(`    ⚠ ${lesson.id} (étape ${k + 1}) : la réponse adverse ${uci} n’est pas la meilleure défense (${after} contre ${bs} pour ${best.pv[0]}), normal si l’exercice montre un piège — ${fen}`);
             }
           }

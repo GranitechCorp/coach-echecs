@@ -484,7 +484,7 @@ function menu(el) {
         <li><b>5 minutes par jour pendant 2 à 3 semaines</b> : le défi du jour + un exercice au choix. Mieux vaut 5 minutes chaque jour qu’une heure le dimanche.</li>
         <li><b>Semaine 1 : côté Blancs</b> (tes parties avec le Gambit Dame). <b>Semaine 2 : côté Noirs</b> (la Caro-Kann), là où tout est inversé. <b>Semaine 3 : au hasard</b>, plus la notation et la visualisation.</li>
         <li>Dis le nom de la case à voix basse quand tu la touches : la voix aide la mémoire.</li>
-        <li>Objectif : plus de 20 bonnes réponses en 30 s des deux côtés. À ce moment-là, « c6 » ou « h7 » te sauteront aux yeux.</li>
+        <li>Objectif : plus de 20 bonnes réponses en 30 s des deux côtés. À ce moment-là, «&nbsp;c6&nbsp;» ou «&nbsp;h7&nbsp;» te sauteront aux yeux.</li>
       </ul>
       <h2>📍 Les repères à connaître par cœur</h2>
       <ul>

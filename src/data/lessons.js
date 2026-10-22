@@ -510,7 +510,7 @@ Les grands classiques :
 
 Avant de le jouer, vérifie les ingrédients :
 - un **fou en d3** qui vise h7 ;
-- un **cavalier en f3** qui pourra sauter en g5 sans être pris ;
+- un **cavalier en f3** qui sautera en g5 avec échec, **protégé par le fou c1** ;
 - une **dame** qui peut arriver en h5 ;
 - **pas de cavalier noir en f6** pour défendre h7 (ici, le pion e5 l'a chassé) ;
 - le roi noir n'a pas de case de fuite confortable.
@@ -526,7 +526,7 @@ Si le roi recule en g8, Dh5 menace le mat en h7. S'il avance en g6 ou h6, la dam
         moves: 'e4 e6 d4 d5 Nc3 Nf6 e5 Nfd7 Nf3 Bb4 Bd3 c5 O-O Nc6 Re1 O-O',
         solution: ['d3h7', 'g8h7', 'f3g5', 'h7g8', 'd1h5'],
         hint: 'Commence par donner ton fou en h7, avec échec.',
-        success: 'Fxh7+ ! Rxh7 Cg5+ Rg8 Dh5 : Dh7 mat est imparable, les Noirs doivent donner leur dame (…Dxg5). Un fou sacrifié qui rapporte une dame !',
+        success: 'Fxh7+ ! Rxh7 Cg5+ Rg8 Dh5 : Dh7 mat est imparable, les Noirs doivent donner leur dame (…Dxg5 Fxg5). Tu as donné un fou et un cavalier, tu récupères une dame et un pion : le sacrifice a payé !',
       },
       {
         type: 'puzzle',
@@ -538,7 +538,7 @@ Si le roi recule en g8, Dh5 menace le mat en h7. S'il avance en g6 ou h6, la dam
       },
       {
         type: 'puzzle',
-        text: 'Avec les Noirs. La 1re rangée blanche n’est gardée que par la tour h1. Sacrifie ta dame pour la détourner de son poste : mat en 3 !',
+        text: 'Avec les Noirs. Ta dame et ta tour e8 visent la case e1, que seule la tour h1 protège. Sacrifie ta dame pour détourner cette tour : mat en 3 !',
         fen: '3rr1k1/pp3pp1/2p1q2p/5b2/P4QPP/2P2P2/1BPR4/2K4R b - - 0 23',
         solution: ['e6e1', 'h1e1', 'e8e1', 'd2d1', 'e1d1'],
         hint: 'Ta dame peut donner échec en e1… même si elle s’y fait prendre.',
@@ -641,7 +641,7 @@ Garde ta tour **loin** du roi adverse pour qu'il ne puisse pas l'attaquer.`,
     id: 'pions-passes',
     module: 'finales',
     title: 'Les pions passés et la percée',
-    minutes: 12,
+    minutes: 14,
     practice: { href: '#/puzzles/theme/endgame', label: 'Exercices de finale' },
     steps: [
       {
@@ -664,6 +664,14 @@ Ici, les Blancs ont un pion passé éloigné en a4 : le roi noir devra aller le 
         solution: ['b5b6', 'a7b6', 'c5c6', 'b7c6', 'a5a6'],
         hint: 'Sacrifie le pion du milieu.',
         success: 'b6 !! Si …axb6, c6 ! bxc6 a6 et le pion a file à dame. Si …cxb6, a6 ! bxa6 c6. Trois pions sur la 5e rangée contre trois sur la 7e : la percée gagne quand les rois sont trop loin.',
+      },
+      {
+        type: 'puzzle',
+        text: '**Course de pions** : aucun roi ne peut rattraper le pion adverse. Ton roi file vers h4, ou tu pousses ton pion ? Compte les coups avant de jouer !',
+        fen: '8/8/8/P3k3/7p/8/8/1K6 w - - 0 1',
+        solution: ['a5a6'],
+        hint: 'Compte : chaque pion a besoin de 3 coups pour faire dame. Qui joue le premier ? Et regarde la grande diagonale a8-h1.',
+        success: 'a6 ! Chaque pion a besoin de 3 coups, mais tu joues le premier : ta dame arrive avant la sienne. Et depuis a8, elle surveille toute la grande diagonale jusqu’à h1, la case où son pion veut faire dame. Si tu avais couru avec ton roi (Rc2 ?), c’était l’inverse : il faisait dame le premier, et sa dame en h1 surveillait a8 !',
       },
       {
         type: 'puzzle',
@@ -753,7 +761,7 @@ L'erreur classique : la tour passive sur la dernière rangée, le roi blanc arri
         solution: ['a6a1', 'f5f6', 'a1f1'],
         allowOthers: true,
         hint: 'Le pion bloque maintenant tes échecs sur la rangée. Où ta tour peut-elle attaquer le roi blanc par derrière ?',
-        success: '…Ta1 ! puis …Tf1+ : des échecs par derrière, et le roi blanc n’a plus d’abri (son pion est devant lui). Rester sur la 6e rangée (…Tc6 ?) perdait : après Rf6, les Blancs menacent Tb8 mat.',
+        success: '…Ta1 ! puis …Tf1+ : des échecs par derrière, et le roi blanc n’a plus d’abri (son pion est devant lui). Rester sur la 6e rangée (…Tc6 ?) perdait : après Rf6, ton roi est enfermé sur la 8e rangée et Tb8+ arrive.',
       },
       {
         type: 'play',
@@ -774,7 +782,9 @@ L'erreur classique : la tour passive sur la dernière rangée, le roi blanc arri
         type: 'play',
         text: `Tiens la nulle contre l'ordinateur ! Les deux règles :
 - garde ton roi **devant le pion** ;
-- quand les rois se font face avec une case entre eux, fais en sorte que ce soit **à lui** de jouer : c'est l'opposition. Quand le pion approche de ta dernière rangée, recule ton roi **droit devant lui**.`,
+- quand les rois se font face avec une case entre eux, fais en sorte que ce soit **à lui** de jouer : c'est l'opposition. Quand le pion approche de ta dernière rangée, recule ton roi **droit devant lui**.
+
+Ici, commence par prendre l'opposition, comme dans l'exercice précédent.`,
         fen: '8/8/4k3/8/3KP3/8/8/8 b - - 0 1',
         goal: 'draw',
         maxMoves: 10,
@@ -910,7 +920,7 @@ Ici, ta Caro-Kann (variante classique) : les Blancs ont roqué côté dame, toi 
         fen: 'r2q1rk1/pp3ppp/2p1pn2/3p4/3P3Q/2PBP3/PP4PP/R4RK1 w - - 0 1',
         solution: ['f1f6'],
         hint: 'Ta tour f1 peut se sacrifier sur f6.',
-        success: 'Txf6 ! Si …gxf6 ou …Dxf6, Dxh7 mat. Sinon, tu as gagné une pièce. Une tour contre un cavalier, c’est cher payé… sauf quand ça ouvre la porte du roi.',
+        success: 'Txf6 ! Si …gxf6 ou …Dxf6, Dxh7 mat : les Noirs ne peuvent pas reprendre ta tour sans être matés, et tu gagnes une pièce. Retiens le réflexe : quand une seule pièce défend le roi, élimine-la, même au prix d’une tour.',
       },
       {
         type: 'puzzle',
@@ -938,7 +948,7 @@ Ici, ta Caro-Kann (variante classique) : les Blancs ont roqué côté dame, toi 
     steps: [
       {
         type: 'text',
-        text: `Être gagnant et **gagner**, ce n'est pas la même chose ! Beaucoup de parties « gagnées » finissent en nulle (pat, échec perpétuel) ou même en défaite. La méthode des champions (Capablanca) :
+        text: `Être gagnant et **gagner**, ce n'est pas la même chose ! Beaucoup de parties « gagnées » finissent en nulle (pat, échec perpétuel) ou même en défaite. La méthode des champions, que Capablanca appliquait à la perfection :
 1. **Supprime le contre-jeu d'abord** : à chaque coup, demande-toi « que veut-il ? » (une menace de mat, un pion passé, un échec perpétuel).
 2. **Échange les pièces, pas les pions** : avec une pièce de plus, chaque échange rend ton avantage plus grand. Garde tes pions : ce sont eux qui feront une nouvelle dame.
 3. **Mets ton roi à l'abri** (donne-lui une case de fuite, avec h3 par exemple), puis **active-le** en finale : c'est une pièce forte.
@@ -987,7 +997,7 @@ Ici, ta Caro-Kann (variante classique) : les Blancs ont roqué côté dame, toi 
     steps: [
       {
         type: 'text',
-        text: `Le grand maître Kotov (*Pensez comme un grand maître*) a donné une méthode que tous les forts joueurs utilisent :
+        text: `Le grand maître Kotov (*Pensez comme un grand maître*) a donné une méthode que beaucoup de forts joueurs utilisent :
 1. **Liste tes coups candidats** (2 à 4) avant d'en calculer un seul.
 2. **Les coups forçants d'abord** : échecs, prises, menaces. Ils limitent les réponses adverses : on peut les calculer jusqu'au bout.
 3. **Calcule chaque ligne une seule fois**, jusqu'à une position calme, puis **visualise la position finale** : qui a gagné du matériel ? un roi est-il en danger ?

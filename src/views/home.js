@@ -18,6 +18,15 @@ export function estimatedLevel(s) {
   return Math.round((0.5 * bot + 0.5 * puzzle) / 10) * 10;
 }
 
+/** Sous-titre de la carte « Mon diagnostic ». */
+function diagText(s, ins) {
+  if (ins.analysed >= 3 && ins.weaknesses.length) return `Priorité n°1 : ${esc(ins.weaknesses[0].title)}`;
+  const cc = s.games.filter((g) => g.source === 'chess.com').length;
+  if (!s.games.length) return 'Récupère tes parties chess.com (ou joue contre l’ordinateur) : l’appli trouvera tes points faibles.';
+  const left = Math.max(0, 3 - ins.analysed);
+  return `${cc ? `${cc} partie${cc > 1 ? 's' : ''} chess.com récupérée${cc > 1 ? 's' : ''} · ` : ''}${ins.analysed} analysée${ins.analysed > 1 ? 's' : ''}${left ? ` — encore ${left} à analyser pour ton diagnostic` : ''}`;
+}
+
 function nextLesson(s) {
   return LESSONS.find((l) => !s.lessons[l.id]?.done);
 }
@@ -68,7 +77,7 @@ export function render(root) {
       ${ins.estElo ? `<div class="small hero-est">Niveau de jeu estimé sur tes ${ins.estEloN} dernières parties analysées : <b>≈ ${ins.estElo}</b>${ins.brilliants ? ` · 💎 ${ins.brilliants} coup${ins.brilliants > 1 ? 's' : ''} brillant${ins.brilliants > 1 ? 's' : ''}` : ''}</div>` : ''}
     </section>
 
-    ${!items && vision.level !== 'solide' ? `<a class="card link-card vision-cta" href="#/vision"><b>👁 Vision de l’échiquier ${vision.dailyDone ? '✓' : ''}</b><span class="muted small">${vision.dailyDone ? 'Défi du jour fait. Bravo !' : `5 minutes par jour pour situer c4, c6 ou h7 sans regarder les lettres. Ton record : ${vision.bestFind} case${vision.bestFind > 1 ? 's' : ''} en 30 s.`}</span></a>` : ''}
+    ${!items && vision.level !== 'solide' ? `<a class="card link-card vision-cta" href="#/vision"><b>👁 Vision de l’échiquier ${vision.dailyDone ? '✓' : ''}</b><span class="muted small">${vision.dailyDone ? 'Défi du jour fait. Bravo !' : `5 minutes par jour pour situer c4, c6 ou h7 sans regarder les lettres.${vision.bestFind ? ` Ton record : ${vision.bestFind} case${vision.bestFind > 1 ? 's' : ''} en 30 s.` : ' Commence par le défi du jour.'}`}</span></a>` : ''}
 
     ${cur ? `<a class="card link-card resume" href="#/game"><b>▶ Reprendre ta partie</b><span class="muted">contre l’ordinateur ${cur.elo} — ${Math.ceil(cur.moves.length / 2)} coups joués</span></a>` : ''}
 
@@ -78,7 +87,7 @@ export function render(root) {
     </section>` : `<section class="card">
       <h2>Plan du jour</h2>
       <a class="todo ${puzzlesToday >= 10 ? 'done' : ''}" href="#/puzzles"><span class="check"></span><span>10 exercices de tactique <small>(${Math.min(puzzlesToday, 10)}/10)</small></span></a>
-      <a class="todo ${due === 0 ? 'done' : ''}" href="#/puzzles/mistakes"><span class="check"></span><span>Revoir mes erreurs <small>(${due} à revoir)</small></span></a>
+      <a class="todo ${due === 0 ? 'done' : ''}" href="#/puzzles/mistakes"><span class="check"></span><span>Revoir mes erreurs <small>(${due ? `${due} à revoir` : 'rien à revoir'})</small></span></a>
       <a class="todo ${gamesToday >= 1 ? 'done' : ''}" href="#/play"><span class="check"></span><span>1 partie contre l’ordinateur + son bilan</span></a>
       <a class="todo ${studiedToday ? 'done' : ''}" href="${lesson ? `#/lesson/${lesson.id}` : '#/learn'}"><span class="check"></span><span>1 leçon ou 1 révision d’ouverture${lesson ? ` <small>(suivante : ${esc(lesson.title)})</small>` : ''}</span></a>
       <a class="btn small" href="#/profile">✨ Créer mon programme personnalisé</a>
@@ -86,7 +95,7 @@ export function render(root) {
 
     <a class="card link-card" href="#/profile">
       <b>📈 Mon diagnostic</b>
-      <span class="muted small">${ins.analysed >= 3 && ins.weaknesses.length ? `Priorité n°1 : ${esc(ins.weaknesses[0].title)}` : `${s.games.filter((g) => g.source === 'chess.com').length} parties chess.com récupérées · ${ins.analysed} analysées — analyse-les pour ton diagnostic`}</span>
+      <span class="muted small">${diagText(s, ins)}</span>
     </a>
 
     ${weak.length ? `<section class="card"><h2>À travailler</h2>${weak
@@ -101,7 +110,7 @@ export function render(root) {
     </section>
 
     ${lastGames.length ? `<section class="card"><h2>Dernières parties</h2>${lastGames
-      .map((g) => `<a class="list-item" href="#/review/${g.id}"><span>${g.userColor === 'w' ? '⚪' : '⚫'} ${esc(g.label || '')}</span><span class="muted">${esc(g.result)}${g.review ? ` · ${Math.round(g.review.accuracy[g.userColor])} %` : ''}</span></a>`)
+      .map((g) => `<a class="list-item" href="#/review/${g.id}"><span>${g.userColor === 'w' ? '⚪' : '⚫'} ${esc(g.label || '')}</span><span class="muted nowrap">${esc(g.result)}${g.review ? ` · ${Math.round(g.review.accuracy[g.userColor])}&nbsp;%` : ''}</span></a>`)
       .join('')}</section>` : ''}
 
     <section class="card small muted">

@@ -74,7 +74,7 @@ export function render(root) {
   root.innerHTML = `
     <section class="card">
       <h2>Mes parties chess.com</h2>
-      <p class="muted small">Le bilan de partie de l’abonnement, gratuitement : choisis une partie et Stockfish l’analyse coup par coup sur ton téléphone.</p>
+      <p class="muted small">Le même bilan que l’abonnement chess.com, mais gratuit : choisis une partie et Stockfish l’analyse coup par coup sur ton téléphone (coups brillants, erreurs, Elo estimé).</p>
       <div class="row"><input id="user" placeholder="Pseudo chess.com" value="${esc(s.profile.chesscomUser)}" autocapitalize="off" autocomplete="off"/><button class="btn primary" id="load-cc">Charger</button></div>
       <button class="btn ghost small" id="load-li">ou charger depuis Lichess</button>
       <div id="list"></div>

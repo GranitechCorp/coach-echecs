@@ -416,8 +416,10 @@ export function explainBrilliant(fen, playedUci, e0, e1, sac, mine = true) {
     const given = (sac?.given || []).map((g) => possessive(g.type, mine));
     out.push(`**${fig(d.san)} est un sacrifice** : ${mine ? 'tu donnes' : 'ton adversaire donne'} ${listFr(given) || 'du matériel'}${n ? ` (au bilan, ${pts(n)} en moins)` : ''}.`);
   }
-  // « Attention : … en prise » décrit le sacrifice lui-même : inutile (et trompeur) de le répéter ici
-  const facts = d.facts.filter((f) => !/^(Attention|Laisse)/.test(f));
+  // « Attention : … en prise » décrit le sacrifice lui-même : inutile (et trompeur) de le répéter ici.
+  // Si la pièce jouée est prise tout de suite, ses « fourchettes » ou « enfilades » n'auront jamais lieu.
+  const movedTaken = !sac?.offered && (sac?.given || []).some((g) => g.square === playedUci.slice(2, 4));
+  const facts = d.facts.filter((f) => !/^(Attention|Laisse)/.test(f) && !(movedTaken && /^(Fourchette|Enfilade|Cloue|Menace)/.test(f)));
   if (facts.length) out.push(...facts.slice(0, 3).map((f) => '• ' + f));
   if (isMateFor(e1?.white, color)) {
     out.push(`Et ça force le **mat en ${Math.abs(e1.white.mate) + 1}** : ${pvToSan(fen, line, 12)}.`);
@@ -426,9 +428,10 @@ export function explainBrilliant(fen, playedUci, e0, e1, sac, mine = true) {
     else if (e1?.pv?.length) out.push(`Suite probable : ${pvToSan(fen, line, 7)}.`);
     const swing = pvMaterialSwing(fen, line, color, 7);
     const chances = `${mine ? 'tes' : 'ses'} chances de gain : ${pct(winOfEval(e1, color))}`;
-    if (swing >= 0 && sac?.offered) out.push(`Le cadeau est refusé et le matériel ne baisse pas${swing >= 2 ? ` (au bout de la suite, environ ${pts(swing)} de plus)` : ''} : la position reste favorable (${chances}).`);
+    const verdict = winOfEval(e1, color) >= 55 ? 'favorable' : 'équilibrée'; // « favorable » à 51 % serait exagéré
+    if (swing >= 0 && sac?.offered) out.push(`Le cadeau est refusé et le matériel ne baisse pas${swing >= 2 ? ` (au bout de la suite, environ ${pts(swing)} de plus)` : ''} : la position reste ${verdict} (${chances}).`);
     else if (swing >= 0) out.push(`Le matériel est récupéré quelques coups plus tard${swing >= 2 ? `, avec un bénéfice d’environ ${pts(swing)}` : ''} : c’est une combinaison.`);
-    else out.push(`Même avec moins de matériel, la position reste favorable (${chances}) : l’activité des pièces et l’attaque valent plus que le matériel donné.`);
+    else out.push(`Même avec moins de matériel, la position reste ${verdict} (${chances}) : l’activité des pièces et l’attaque ${verdict === 'favorable' ? 'valent plus que' : 'compensent'} le matériel donné.`);
   }
   if (e0?.second && !isMateFor(e0.second, color)) {
     const w2 = winOf(e0.second, color);

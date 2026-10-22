@@ -9,6 +9,9 @@ import { OPENING_LINES, parseLine } from './data/openings.js';
 
 // v3 : analyse en multipv 2 (score de la 2e ligne), étiquettes brillant / fort / occasion manquée, Elo estimé
 export const REVIEW_VERSION = 3;
+// version des règles d'étiquetage (!!, !, ✗) : les étiquettes se recalculent sans moteur quand elle change
+// (2 : la pièce sacrifiée doit être en prise juste après le coup ; pas de « brillant » au-delà de ≈ +6)
+export const TAGS_VERSION = 2;
 
 /** Trouve la ligne de répertoire qui colle le plus longtemps à la partie. */
 export function matchOpening(sans) {
@@ -139,9 +142,13 @@ export function sacrificeOf(fen, played, replyPv, color, fenAfter = null) {
     if (!hung.has(sq)) hung.set(sq, isHanging(c, sq));
     return hung.get(sq);
   };
+  // … et une pièce que le coup ne laisse pas en prise non plus : si elle tombe plus tard, c'est un simple
+  // échange (avec un coup intermédiaire) ou le sacrifice d'un coup suivant, pas celui de ce coup-ci
+  const cAfter = candidates.length ? (fenAfter ? safeChess(fenAfter) : (() => { const x = safeChess(fen); return x && playUci(x, played) ? x : null; })()) : null;
+  const offeredNow = (sq) => !!cAfter && cAfter.get(sq)?.color === color && isHanging(cAfter, sq);
   let best = null;
   for (const cand of candidates) {
-    const notMine = (g) => g.later || wasHanging(g.from);
+    const notMine = (g) => g.later || wasHanging(g.from) || !offeredNow(g.square);
     const real = cand.given.filter((g) => !notMine(g));
     // ces pièces-là ne comptent pas non plus dans le déficit (sinon « pièce déjà en prise + échange
     // des dames », ou un échange suivi d'un sacrifice au coup d'après, passeraient pour un sacrifice)
@@ -213,7 +220,8 @@ export function computeTags(fens, moves, evals, classes) {
     if ((isBest || loss <= 2) && after >= 50) {
       const sac = sacrificeOf(fens[i], played, e1.pv, color, fens[i + 1]);
       if (sac) {
-        if (before < 97) return 'brilliant';
+        // en dessous de 90 % (≈ +6) : la position n'était pas déjà gagnée sans ce sacrifice
+        if (before < 90) return 'brilliant';
         // déjà totalement gagnant : seulement si le sacrifice mate ou rapporte nettement plus que la 2e option
         const sign = color === 'w' ? 1 : -1;
         const gap = e0.second ? (cpOfEval(e1) - cpWhite({ white: e0.second })) * sign : 0;
@@ -263,8 +271,9 @@ export function computeGameElo(moves, evals) {
 export function ensureReviewExtras(review, fens, moves) {
   if (!review?.evals || review.evals.length !== moves.length + 1) return false;
   let changed = false;
-  if (!Array.isArray(review.tags) || review.tags.length !== moves.length) {
+  if (!Array.isArray(review.tags) || review.tags.length !== moves.length || review.tagsV !== TAGS_VERSION) {
     review.tags = computeTags(fens, moves, review.evals, review.classes);
+    review.tagsV = TAGS_VERSION;
     changed = true;
   }
   if (!review.elo) {
@@ -355,6 +364,7 @@ export async function analyzeGame(game, { depth = 12, onProgress, isAlive = () =
     counts,
     accuracy: { w: avg(acc.w), b: avg(acc.b) },
     tags: computeTags(fens, moves, evals, classes),
+    tagsV: TAGS_VERSION,
     elo: { w: est.w, b: est.b },
     acpl: est.acpl,
     opening: openingName(headers, match),
@@ -410,6 +420,7 @@ export function deriveGame(game, parsed, review) {
   const userCp = (k) => cpOfEval(ev[k]) * sign; // évaluation pour l'utilisateur dans la position k
   const out = {
     v: REVIEW_VERSION,
+    tagsV: TAGS_VERSION,
     score: userScore(game, headers),
     moves: 0,
     acc: { o: [], m: [], e: [] },
@@ -418,7 +429,8 @@ export function deriveGame(game, parsed, review) {
     converted: 0,
     maxAdv: -99999,
     minAdv: 99999,
-    evalAt20: ev[Math.min(20, ev.length - 1)] ? userCp(Math.min(20, ev.length - 1)) : 0,
+    // borné à ±10 : un mat (±10000) ferait exploser la moyenne par ouverture
+    evalAt20: ev[Math.min(20, ev.length - 1)] ? Math.max(-1000, Math.min(1000, userCp(Math.min(20, ev.length - 1)))) : 0,
     pawnsAt30: pawnCount(fens[Math.min(30, fens.length - 1)]),
     capturesChecks: 0,
     earlyMoves: 0,
@@ -515,7 +527,7 @@ export function deriveGame(game, parsed, review) {
 /** Recalcule les données dérivées si le format a changé (sans relancer le moteur). */
 export function ensureDerived(game) {
   if (!game.review?.evals) return game.review?.derived || null;
-  if (game.review.derived?.v === REVIEW_VERSION) return game.review.derived;
+  if (game.review.derived?.v === REVIEW_VERSION && game.review.derived.tagsV === TAGS_VERSION) return game.review.derived;
   const parsed = parsePgn(game.pgn);
   if (!parsed) return null;
   // anciens bilans : on ajoute les étiquettes et l'Elo estimé (calculés sans moteur)

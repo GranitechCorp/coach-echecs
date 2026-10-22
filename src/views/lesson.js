@@ -16,7 +16,8 @@ const toShapes = (shapes = []) =>
 /**
  * Typographie française : espace insécable avant « : ; ! ? » et à l'intérieur des guillemets,
  * et entre un nombre et le mot qui suit (« 2 minutes », « Td8 mat ») : jamais de « ou de ! seul en début de ligne.
- * (pas entre deux coups : « e4 e5 » ou « c6 bxc6 » doivent pouvoir passer à la ligne)
+ * (pas entre deux coups : « e4 e5 » ou « c6 bxc6 » doivent pouvoir passer à la ligne) ;
+ * un coup noir « …Dxg5 » ne se coupe pas après les points de suspension (« word joiner » invisible).
  */
 const nb = (s) =>
   typeof s === 'string'
@@ -24,6 +25,7 @@ const nb = (s) =>
         .replace(/« /g, '«\u00a0')
         .replace(/ ([»:;!?])/g, '\u00a0$1')
         .replace(/(\d) (?=\p{Ll}+(?![\p{L}\d]))/gu, '$1\u00a0')
+        .replace(/…(?=[A-Za-h♔-♟])/g, '…\u2060')
     : s;
 /** Mêmes textes, espaces insécables en plus (le reste de l'étape est inchangé). */
 const nbStep = (st) => {
@@ -136,8 +138,8 @@ export function render(root, id) {
       <div class="big">🎓</div><h2>Leçon terminée !</h2>
       <p>${esc(nb(lesson.practiceText || 'Pour ancrer ce que tu viens d’apprendre, fais quelques exercices sur le même thème.'))}</p>
       <div class="row wrap center">
-        <a class="btn primary" href="${esc(practice.href)}">${esc(practice.label)}</a>
-        ${next ? `<a class="btn" href="#/lesson/${next.id}">Leçon suivante : ${esc(next.title)}</a>` : ''}
+        <a class="btn primary" href="${esc(practice.href)}">${esc(nb(practice.label))}</a>
+        ${next ? `<a class="btn" href="#/lesson/${next.id}">${esc(nb(`Leçon suivante : ${next.title}`))}</a>` : ''}
         <a class="btn ghost" href="#/learn">Retour aux cours</a>
       </div></section>`;
   }
@@ -398,15 +400,15 @@ function playStep(el, st, fen) {
     if (reply) sound(!!reply.captured);
     board.setPosition(chess, { interactive: me });
     if (chess.isCheckmate()) return end(`${overText()}. Reprends ton coup ou recommence !`, false, true);
+    // objectif « dame » : un pion pris (avant « nulle : matériel insuffisant », moins parlant quand c'était le dernier)
+    const fallen = goal === 'promote' && reply?.captured === 'p' ? reply.to[0] + (reply.flags.includes('e') ? reply.from[1] : reply.to[1]) : null;
+    const left = fallen ? chess.findPiece({ type: 'p', color: me }).length : 0;
+    if (fallen && !left) return end('Ton dernier pion est tombé : tu ne peux plus aller à dame. Reprends ton coup ou recommence !', false, true);
     if (chess.isGameOver()) {
       if (goal === 'draw') return end(`🎉 ${overText()} : objectif atteint${retakeText()} !`, true);
       return end(`${overText()}. Reprends ton coup ou recommence !`, false, true);
     }
-    if (goal === 'promote' && reply?.captured === 'p') {
-      const left = chess.findPiece({ type: 'p', color: me }).length;
-      if (!left) return end('Ton dernier pion est tombé… Reprends ton coup ou recommence !', false, true);
-      say(`Ton pion ${reply.to} est tombé : il t’en reste ${left}. S’il a servi de leurre, c’est le plan : continue !`);
-    }
+    if (fallen) say(`Ton pion ${fallen} est tombé : il t’en reste ${left}. S’il a servi de leurre, c’est le plan : continue !`);
     if (goal === 'draw') say(progress());
   }
 

@@ -104,7 +104,7 @@ export function profileReportLocal(ins, recs) {
   }
   if (ins.bpg !== null) {
     const b = ins.bpg;
-    out.push(b >= 2 ? `Tu fais en moyenne ${b.toFixed(1)} gaffes par partie : c’est LE levier n°1. En dessous de 1 gaffe par partie, tu gagneras des centaines de points.` : b >= 1 ? `${b.toFixed(1)} gaffe par partie : c’est dans la moyenne à ton niveau, et c’est encore ce qui te coûte le plus.` : `Moins d’une gaffe par partie : ta vigilance est un vrai atout.`);
+    out.push(b >= 2 ? `Tu fais en moyenne ${b.toFixed(1).replace('.', ',')} gaffes par partie : c’est LE levier n°1. En dessous de 1 gaffe par partie, tu gagneras des centaines de points.` : b >= 1 ? `${b.toFixed(1).replace('.', ',')} gaffe par partie : c’est dans la moyenne à ton niveau, et c’est encore ce qui te coûte le plus.` : `Moins d’une gaffe par partie : ta vigilance est un vrai atout.`);
   }
   if (ins.weaknesses.length) {
     out.push('**Tes 3 priorités :**');

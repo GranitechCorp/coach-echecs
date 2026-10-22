@@ -66,11 +66,11 @@ export function buildProgram(ins) {
   };
   const visionItem = { type: 'vision', label: 'Vision : le défi du jour (5 min)', why: 'Te repérer sur l’échiquier sans regarder les lettres' };
   const mistakes = s.mistakes.length || ins.analysed ? { type: 'mistakes', label: 'Revoir « Mes erreurs » du jour' } : null;
-  const woodItem = { type: 'woodpecker', label: !wood.active ? 'Woodpecker : commence ton lot d’exercices (20 min)' : wood.cycleFinished ? `Woodpecker : commence le cycle ${wood.cycle + 1} (20 min)` : `Woodpecker : continue ton cycle ${wood.cycle} (20 min)`, why: 'Transformer les motifs tactiques en réflexes' };
+  const woodItem = { type: 'woodpecker', label: !wood.active ? 'Woodpecker : commence ton lot (au moins 10 exercices)' : wood.cycleFinished ? `Woodpecker : commence le cycle ${wood.cycle + 1} (au moins 10 exercices)` : `Woodpecker : continue ton cycle ${wood.cycle} (au moins 10 exercices)`, why: 'Transformer les motifs tactiques en réflexes' };
   const rushItem = { type: 'rush', count: 2, label: '2 courses contre la montre', why: 'Le coup d’œil tactique' };
   const playItem = { type: 'play', elo: level, label: `1 partie contre l’ordinateur ${level}` };
   const selfItem = { type: 'selfreview', label: 'Auto-analyse de ta dernière partie, puis son bilan Stockfish', why: 'Apprendre à trouver tes erreurs tout seul' };
-  const guessItem = { type: 'guess', label: 'Devine le coup : une partie modèle', why: 'Comprendre les plans des bons joueurs' };
+  const guessItem = { type: 'guess', label: 'Devine le coup : au moins 10 coups d’une partie modèle', why: 'Comprendre les plans des bons joueurs' };
 
   const plan = [
     [visionWeak && visionItem, tactics(10), mistakes, lesson()],
@@ -122,11 +122,13 @@ export function isDone(item) {
     case 'rush':
       return rushStats().today.runs >= (item.count || 1);
     case 'woodpecker':
-      return s.lastVisit?.woodpecker === t;
+      // au moins 10 exercices du lot aujourd'hui (ou un cycle bouclé) : ouvrir la page ne suffit pas
+      return s.puzzles.history.filter((x) => x.date?.startsWith(t) && x.kind === 'woodpecker').length >= 10 || !!s.woodpecker?.cycles?.some((c) => c.finishedAt?.startsWith(t));
     case 'selfreview':
       return Object.values(s.selfReviews || {}).some((r) => r.date?.startsWith(t));
     case 'guess':
-      return s.lastVisit?.guess === t;
+      // au moins 10 coups devinés aujourd'hui, ou une partie modèle terminée
+      return s.guessDay?.date === t && (s.guessDay.n >= 10 || !!s.guessDay.finished);
     default:
       return false;
   }
@@ -154,7 +156,7 @@ export function itemHref(item) {
     case 'analyze':
       return '#/profile';
     case 'vision':
-      return '#/vision';
+      return '#/vision/daily';
     case 'rush':
       return '#/rush';
     case 'woodpecker':

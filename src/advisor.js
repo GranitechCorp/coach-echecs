@@ -16,6 +16,9 @@ const CATALOG = [
   { id: 'qgd-black', slot: 'b-d4', name: 'Gambit Dame Refusé (1…d5 2.c4 e6)', groups: ['qgd-black'], match: /queens gambit declined/, tactical: 0.3, open: 0.3, theory: 0.5, pitch: 'Le grand classique, solide. Tu connais déjà ses idées grâce à ton Gambit Dame avec les Blancs.' },
 ];
 
+/** Le répertoire choisi par le joueur (cours, programme et parties modèles sont construits autour). */
+const REPERTOIRE = ['qg', 'caro', 'slav'];
+
 export const SLOTS = { w: 'Avec les Blancs', 'b-e4': 'Avec les Noirs contre 1.e4', 'b-d4': 'Avec les Noirs contre 1.d4' };
 
 /**
@@ -65,12 +68,21 @@ export function recommendOpenings(ins, elo = 900) {
           if (c.open <= 0.35) reasons.push('structure solide qui limite les gaffes tactiques');
         }
         // 5. ce que tu joues déjà et tes résultats
+        if (REPERTOIRE.includes(c.id) && s.n < 3) {
+          score += 1; // le répertoire que tu as choisi (Gambit Dame, Caro-Kann, Slave) : tu en connais déjà les idées
+          reasons.push('c’est ton répertoire : tu en connais déjà les idées');
+        }
         if (s.n >= 3) {
           score += 1.6; // changer d'ouverture coûte cher : l'habitude a de la valeur
-          reasons.push(`tu l’as jouée ${s.n} fois : ${s.scorePct ?? '?'} % de points${s.evalAt20 !== null ? `, position moyenne au coup 10 : ${s.evalAt20 > 0 ? '+' : ''}${(s.evalAt20 / 100).toFixed(1)}` : ''}`);
+          reasons.push(`tu l’as jouée ${s.n} fois : ${s.scorePct ?? '?'} % de points${s.evalAt20 !== null ? `, position moyenne au coup 10 : ${s.evalAt20 > 0 ? '+' : ''}${(s.evalAt20 / 100).toFixed(1).replace('.', ',')}` : ''}`);
           // les résultats ne comptent que sur un échantillon suffisant
           if (s.n >= 8) {
-            if (s.scorePct !== null && s.scorePct < 40) score -= 1.4;
+            // de mauvais résultats ne condamnent l'ouverture que si tu en sors mal : sinon, ils viennent de la suite
+            const outOk = s.evalAt20 !== null && s.evalAt20 >= 0;
+            if (s.scorePct !== null && s.scorePct < 40) {
+              if (outOk) reasons.push('tu sors bien de l’ouverture : tes défaites se jouent plus tard, pas dans l’ouverture');
+              else score -= 1.4;
+            }
             if (s.scorePct !== null && s.scorePct >= 55) score += 0.6;
             if (s.evalAt20 !== null && s.evalAt20 < -100) score -= 0.8;
           } else reasons.push('encore trop peu de parties pour juger tes résultats');

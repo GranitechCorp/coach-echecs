@@ -54,7 +54,7 @@ small, .small { font-size: 0.85em; }
   padding-right: max(12px, env(safe-area-inset-right, 0px));
   background: var(--bg2); border-bottom: 1px solid var(--line);
 }
-.topbar h1 { flex: 1; font-size: 1.05rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar h1 { flex: 1; font-size: 1.05rem; line-height: 1.2; margin: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .icon-btn { background: none; border: 0; color: var(--text); font-size: 1.3rem; padding: 4px 8px; cursor: pointer; }
 .tabbar {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
@@ -135,6 +135,7 @@ label > input:not([type=checkbox]):not([type=radio]), label > select { margin-to
 .resume { border: 1px solid var(--accent); }
 .list-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); width: 100%; background: none; border-left: 0; border-right: 0; border-bottom: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .list-item a { flex: 1; }
+.nowrap { white-space: nowrap; flex: none; }
 .line-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
 .line-item .row { margin: 0; flex: none; }
 
@@ -146,14 +147,14 @@ label > input:not([type=checkbox]):not([type=radio]), label > select { margin-to
 .cg-host.cg-wrap { width: 100%; height: 100%; }
 cg-board { border-radius: 4px; }
 /* coordonnées dessinées dans les cases du bord (le plateau est coupé à ses limites) */
-.cg-wrap coords { font-size: 10px; font-weight: 700; opacity: 1; font-family: inherit; }
+.cg-wrap coords { font-size: 11px; font-weight: 700; opacity: 1; font-family: inherit; }
 .cg-wrap coords.ranks { left: 2px; top: 0; height: 100%; width: 12px; }
 .cg-wrap coords.ranks coord { transform: none; padding-top: 1px; }
 .cg-wrap coords.files { left: 0; bottom: 0; width: 100%; height: 13px; text-transform: lowercase; text-align: right; }
 .cg-wrap coords.files coord { padding-right: 3px; }
-.cg-wrap coords coord { color: #9a7552; }
-.cg-wrap coords.ranks:not(.black) coord:nth-child(odd), .cg-wrap coords.files:not(.black) coord:nth-child(odd),
-.cg-wrap coords.ranks.black coord:nth-child(even), .cg-wrap coords.files.black coord:nth-child(even) { color: #f0d9b5; }
+/* brun foncé sur les deux couleurs de case (bords et « coordonnées dans les cases ») : les cases foncées de ce thème
+   sont claires, le texte blanc du thème y était illisible. Sélecteur plus précis que celui de chessground.brown.css. */
+.board .cg-wrap coords coord:nth-child(n) { color: #4a3220; }
 .evalbar { width: 14px; flex: none; border-radius: 3px; background: #403d39; position: relative; overflow: hidden; }
 .evalbar-fill { position: absolute; bottom: 0; left: 0; right: 0; background: #f0f0f0; transition: height 0.4s; }
 .evalbar.flipped .evalbar-fill { background: #f0f0f0; }
@@ -205,10 +206,11 @@ cg-board { border-radius: 4px; }
 /* ─── Bilan ─── */
 .acc-row { display: flex; gap: 24px; margin: 8px 0; }
 .counts { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
-.graph { width: 100%; height: 70px; background: #e8e6e1; border-radius: 6px; margin: 6px 0; cursor: pointer; }
-.g-black { fill: #3d3a36; opacity: 0; }
-.g-mid { stroke: #aaa; stroke-width: 0.5; }
-.g-line { fill: none; stroke: #312e2b; stroke-width: 1.5; }
+.graph { width: 100%; height: 70px; background: #403d39; border-radius: 6px; margin: 6px 0; cursor: pointer; }
+/* comme sur chess.com : la zone claire sous la courbe = l'avantage des Blancs */
+.g-area { fill: #ece9e4; }
+.g-mid { stroke: #8a8580; stroke-width: 0.5; stroke-dasharray: 3 3; }
+.g-line { fill: none; stroke: #b9b4ad; stroke-width: 1; }
 .graph circle { stroke: #fff; stroke-width: 1; }
 .mk-blunder { fill: var(--c-blunder); }
 .mk-mistake { fill: var(--c-mistake); }
@@ -231,7 +233,7 @@ cg-board { border-radius: 4px; }
 }
 .modal { position: fixed; inset: 0; background: #0009; display: flex; align-items: center; justify-content: center; z-index: 60; padding: 20px; }
 .modal-box { background: var(--card); border-radius: var(--radius); padding: 16px; max-width: 420px; width: 100%; }
-.del { font-size: 1rem; opacity: 0.6; }
+.del { font-size: 1rem; opacity: 0.6; min-width: 40px; min-height: 40px; }
 
 @media (min-width: 900px) {
   main { max-width: 760px; }
@@ -249,7 +251,7 @@ cg-board { border-radius: 4px; }
 .weak-head { display: flex; gap: 8px; align-items: center; }
 .weak-rank { width: 22px; height: 22px; border-radius: 50%; background: var(--card2); display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; flex: none; }
 .day { border-top: 1px solid var(--line); padding: 6px 0; }
-.day summary { cursor: pointer; padding: 4px 0; text-transform: capitalize; }
+.day summary { cursor: pointer; padding: 4px 0; }
 .day .todo:first-of-type { border-top: 0; }
 .otable { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 4px 0 10px; }
 .otable th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px; }

@@ -25,7 +25,8 @@ export function render(root, id, startIdx) {
   const s = db();
   const game = s.games.find((x) => x.id === id);
   if (!game) {
-    root.innerHTML = '<p class="card">Partie introuvable.</p>';
+    setTitle('Bilan de la partie', '#/analysis');
+    root.innerHTML = '<section class="card"><p>Cette partie est introuvable : elle a peut-être été supprimée.</p><a class="btn small" href="#/analysis">Voir mes parties</a></section>';
     return;
   }
   setTitle('Bilan de la partie', game.source === 'bot' ? '#/' : '#/analysis');
@@ -121,7 +122,7 @@ export function render(root, id, startIdx) {
           <div><div class="big muted">${Math.round(r.accuracy[them])}%</div><div class="muted small">adversaire</div>${eloLine(elo[them], false)}</div>
         </div>
         ${elo[me] ? `<details class="ri-help small"><summary>D’où vient l’Elo estimé ?</summary>
-          <p>C’est une estimation <b>indicative</b>, calculée comme le « Game Rating » de chess.com : Stockfish mesure combien chaque coup fait perdre${acplMe !== null && acplMe !== undefined ? ` (pour toi, en moyenne ${acplMe} centipions par coup, soit ${(acplMe / 100).toFixed(1).replace('.', ',')} pion${acplMe >= 200 ? 's' : ''})` : ''}. Moins tu perds, plus l’estimation est haute.</p>
+          <p>C’est une estimation <b>indicative</b>, calculée comme l’« Elo de la partie » du bilan chess.com : Stockfish mesure combien chaque coup fait perdre${acplMe !== null && acplMe !== undefined ? ` (pour toi, en moyenne ${acplMe} centipion${acplMe > 1 ? 's' : ''} par coup, ${acplMe < 5 ? 'presque rien' : `soit ${(acplMe / 100).toFixed(1).replace('.', ',')} pion${acplMe >= 200 ? 's' : ''}`})` : ''}. Moins tu perds, plus l’estimation est haute.</p>
           <p class="muted">Sur une seule partie, ça varie beaucoup : regarde plutôt la tendance dans « Mes progrès ».</p>
         </details>` : ''}
         <div class="counts">${['brilliant', 'great', 'miss']
@@ -131,7 +132,7 @@ export function render(root, id, startIdx) {
           .filter((c) => r.counts[me][c])
           .map((c) => `<span class="badge c-${CLASSES[c].css}">${CLASSES[c].sym} ${r.counts[me][c]} ${(r.counts[me][c] > 1 ? CLASSES[c].plural : CLASSES[c].label).toLowerCase()}</span>`)
           .join('')}</div>
-        <svg class="graph" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><rect width="${W}" height="${H / 2}" class="g-black"/><line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" class="g-mid"/><polyline points="${pts}" class="g-line"/>${marks}${tagMarks}</svg>
+        <svg class="graph" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polygon points="0,${H} ${pts} ${W},${H}" class="g-area"/><line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" class="g-mid"/><polyline points="${pts}" class="g-line"/>${marks}${tagMarks}</svg>
         <div class="row wrap">
           ${keyIdx.length ? `<button class="btn small" id="first-key">🎯 Voir mes erreurs (${keyIdx.length})</button>` : '<span class="muted small">Aucune grosse erreur : bravo !</span>'}
           ${tagIdx.brilliant.length ? `<button class="btn small ri-btn-brilliant" id="ri-brilliant">💎 Mes coups brillants (${tagIdx.brilliant.length})</button>` : ''}

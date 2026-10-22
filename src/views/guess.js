@@ -54,6 +54,17 @@ function progressOf(g) {
   return ok ? p : null;
 }
 
+/** Coups devinés aujourd'hui (pour cocher « Devine le coup » dans le programme du jour). */
+function countToday({ finished = false } = {}) {
+  update((d) => {
+    const t = new Date().toISOString().slice(0, 10);
+    const g = d.guessDay?.date === t ? d.guessDay : { date: t, n: 0 };
+    if (finished) g.finished = true;
+    else g.n++;
+    d.guessDay = g;
+  });
+}
+
 function saveRecord(id, fn) {
   update((d) => {
     d.guess ||= {};
@@ -531,6 +542,7 @@ export function render(root, id) {
       hud();
       // enregistré tout de suite : si tu quittes pendant l'animation, ce coup reste compté
       if (i + 1 < plies.length) saveProgress(i + 1);
+      if (kind !== 'skip') countToday();
 
       // ton coup (rouge si raté, bleu sinon) et le vrai (vert), puis on joue le vrai
       const green = [arrow(p.uci, 'green')];
@@ -566,6 +578,7 @@ export function render(root, id) {
         }
         delete r.progress;
       });
+      countToday({ finished: true });
       // ne : coup que Stockfish n'a pas pu vérifier (il ne compte ni dans le score ni dans les ratés)
       const count = (...k) => state.results.filter((r) => k.includes(r.kind) && !r.ne).length;
       const unchecked = state.results.filter((r) => r.ne).length;

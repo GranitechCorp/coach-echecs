@@ -25,6 +25,9 @@ const CLASSES = [
   ['bullet', 'Bullet'],
   ['bot', 'Ordinateur'],
 ];
+/** Nombre à une décimale, à la française (« 1,2 »). */
+const dec1 = (v) => v.toFixed(1).replace('.', ',').replace('-', '−');
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 const ago = (t) => {
   if (!t) return 'jamais';
   const m = Math.round((Date.now() - t) / 60000);
@@ -82,7 +85,7 @@ export function render(root) {
       ${ins.analysed < 3 ? `<section class="card"><p>📊 Analyse au moins <b>3 parties</b> pour obtenir ton diagnostic. Plus il y a de parties analysées (idéalement 20 ou plus), plus le diagnostic est fiable.</p></section>` : `
       <section class="card">
         <h2>Ton diagnostic</h2>
-        <p class="small muted">Sur ${ins.analysed} parties analysées · ${ins.bpg.toFixed(1)} gaffe${ins.bpg >= 2 ? 's' : ''} par partie. Touche une compétence pour savoir comment elle est calculée.</p>
+        <p class="small muted">Sur ${ins.analysed} parties analysées · ${dec1(ins.bpg)} gaffe${ins.bpg >= 2 ? 's' : ''} par partie. Touche une compétence pour savoir comment elle est calculée.</p>
         ${skillBars(SKILLS.map((k) => ({ label: k.label, value: ins.skills[k.id], help: k.help })))}
         ${tagsDiagnostic(ins)}
       </section>
@@ -108,7 +111,7 @@ export function render(root) {
         ${progFresh ? `${prog.focus?.length ? `<p class="small muted">Axes de travail : ${prog.focus.map(esc).join(' · ')}</p>` : ''}
           ${prog.days.map((d) => {
             const isToday = d.date === new Date().toISOString().slice(0, 10);
-            const label = new Date(d.date + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
+            const label = cap(new Date(d.date + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }));
             return `<details class="day" ${isToday ? 'open' : ''}><summary>${isToday ? '<b>Aujourd’hui</b>' : esc(label)}</summary>
               ${d.items.map((it) => `<a class="todo ${isToday && isDone(it) ? 'done' : ''}" href="${itemHref(it)}"><span class="check"></span><span>${esc(it.label)}${it.why ? `<br/><small class="muted">pour : ${esc(it.why)}</small>` : ''}</span></a>`).join('')}
             </details>`;
@@ -132,7 +135,7 @@ export function render(root) {
           return `<h4>${c === 'w' ? '⚪ Avec les Blancs' : '⚫ Avec les Noirs'}</h4>${list.length ? `<table class="otable"><thead><tr><th>Ouverture</th><th>Parties</th><th>Points</th><th>Coup 10</th></tr></thead><tbody>${list
             .map((o) => {
               const lines = linesForFamily(o.family, c);
-              return `<tr class="${o.problem ? 'warn' : ''}"><td>${o.problem ? '⚠ ' : ''}${lines.length ? `<a href="#/opening/${lines[0].id}/learn">${esc(frOpening(o.family))}</a>` : esc(frOpening(o.family))}</td><td>${o.n}</td><td>${o.scorePct ?? '—'} %</td><td>${o.evalAt20 === null ? '—' : (o.evalAt20 > 0 ? '+' : '') + (o.evalAt20 / 100).toFixed(1)}</td></tr>`;
+              return `<tr class="${o.problem ? 'warn' : ''}"><td>${o.problem ? '⚠ ' : ''}${lines.length ? `<a href="#/opening/${lines[0].id}/learn">${esc(frOpening(o.family))}</a>` : esc(frOpening(o.family))}</td><td>${o.n}</td><td>${o.scorePct ?? '—'} %</td><td>${o.evalAt20 === null ? '—' : (o.evalAt20 > 0 ? '+' : '') + dec1(o.evalAt20 / 100)}</td></tr>`;
             })
             .join('')}</tbody></table>` : '<p class="muted small">Pas encore de parties.</p>'}`;
         }).join('')}
@@ -160,7 +163,7 @@ export function render(root) {
             ${alt ? `<p class="small">Alternative : <a href="#/opening/${firstLine(alt).id}/learn">${esc(alt.name)}</a></p>` : ''}
           </div>`;
         }).join('')}
-        <p class="muted small">Ces conseils viennent de règles simples (ton style mesuré, tes résultats par ouverture, la quantité de théorie adaptée à ton niveau). Pour un avis plus nuancé, demande le rapport du coach IA ci-dessous.</p>
+        <p class="muted small">Ces conseils viennent de règles simples (ton répertoire, ton style mesuré, tes résultats par ouverture, la quantité de théorie adaptée à ton niveau).${aiEnabled() ? ' Pour un avis plus nuancé, demande le rapport du coach IA ci-dessous.' : ''} Changer d’ouverture coûte cher : à ton niveau, ce sont surtout les gaffes qui décident des parties.</p>
       </section>
 
       ${ins.analysed >= 3 ? `<section class="card">
@@ -185,9 +188,9 @@ export function render(root) {
     const bp = an.map((g, i) => {
       const win = an.slice(Math.max(0, i - 4), i + 1);
       const avg = win.reduce((a, x) => a + x.review.derived.errors.filter((e) => e.cls === 'blunder').length, 0) / win.length;
-      return { y: avg, x: new Date(g.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }), label: `${new Date(g.date).toLocaleDateString('fr-FR')} : ${avg.toFixed(1)} gaffe(s)/partie` };
+      return { y: avg, x: new Date(g.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }), label: `${new Date(g.date).toLocaleDateString('fr-FR')} : ${dec1(avg)} gaffe${avg >= 2 ? 's' : ''} par partie` };
     });
-    root.querySelector('#blunder-chart').innerHTML = lineChart(bp, { yLabel: 'Gaffes par partie', fmt: (v) => v.toFixed(1) });
+    root.querySelector('#blunder-chart').innerHTML = lineChart(bp, { yLabel: 'Gaffes par partie', fmt: (v) => dec1(v) });
     attachLineTooltip(root.querySelector('#blunder-chart'), bp);
     const estBox = root.querySelector('#est-chart');
     if (estBox) {
@@ -330,7 +333,7 @@ function levelCard(ins, s) {
     ${ins.estEloSeries.length >= 2 ? '<p class="small muted">Elo estimé à chaque partie</p><div id="est-chart"></div>' : ''}
     ${tags.length ? `<div class="ri-tags-line">${tags.map((t) => `<span class="badge ri-tag ri-${TAGS[t].css}"><b>${TAGS[t].sym}</b> ${tagCount(t, ins[{ brilliant: 'brilliants', great: 'greats', miss: 'misses' }[t]])}</span>`).join('')}</div>` : ''}
     ${lastB ? `<a class="btn small ri-btn-brilliant" href="#/review/${encodeURIComponent(lastB.gameId)}/${lastB.i}">💎 Revoir mon dernier coup brillant</a>` : ''}
-    <p class="muted small">Estimation indicative, calculée comme le « Game Rating » de chess.com : plus tu perds peu de terrain à chaque coup (mesuré par Stockfish), plus elle est haute. Une partie isolée varie beaucoup : c’est la tendance qui compte.</p>
+    <p class="muted small">Estimation indicative, calculée comme l’« Elo de la partie » du bilan chess.com : plus tu perds peu de terrain à chaque coup (mesuré par Stockfish), plus elle est haute. Une partie isolée varie beaucoup : c’est la tendance qui compte.</p>
   </section>`;
 }
 
