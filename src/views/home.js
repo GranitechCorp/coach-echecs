@@ -2,6 +2,7 @@ import { db } from '../storage.js';
 import { setTitle, esc } from '../ui.js';
 import { LESSONS, MODULES } from '../data/lessons.js';
 import { todayItems, isDone, itemHref } from '../program.js';
+import { visionStats } from './vision.js';
 import { computeInsights, filterGames } from '../insights.js';
 
 export const tab = 'home';
@@ -35,6 +36,7 @@ export function render(root) {
   const level = ccElo || estimatedLevel(s);
   const levelLabel = ccElo ? `Ton Elo chess.com (${s.ccRatings?.rapid ? 'rapide' : 'blitz'})` : 'Ton niveau estimé';
   const items = todayItems();
+  const vision = visionStats();
   const ins = computeInsights(filterGames(s.games, s.insightFilter || ['rapid', 'blitz', 'daily', 'bot']));
   const { startElo, goalElo } = s.profile;
   const pct = Math.max(2, Math.min(100, ((level - startElo) / (goalElo - startElo)) * 100));
@@ -63,7 +65,10 @@ export function render(root) {
         <span>Départ ${startElo}</span>
         <span>🔥 ${s.streak.days} jour${s.streak.days > 1 ? 's' : ''} d’affilée</span>
       </div>
+      ${ins.estElo ? `<div class="small hero-est">Niveau de jeu estimé sur tes ${ins.estEloN} dernières parties analysées : <b>≈ ${ins.estElo}</b>${ins.brilliants ? ` · 💎 ${ins.brilliants} coup${ins.brilliants > 1 ? 's' : ''} brillant${ins.brilliants > 1 ? 's' : ''}` : ''}</div>` : ''}
     </section>
+
+    ${!items && vision.level !== 'solide' ? `<a class="card link-card vision-cta" href="#/vision"><b>👁 Vision de l’échiquier ${vision.dailyDone ? '✓' : ''}</b><span class="muted small">${vision.dailyDone ? 'Défi du jour fait. Bravo !' : `5 minutes par jour pour situer c4, c6 ou h7 sans regarder les lettres. Ton record : ${vision.bestFind} case${vision.bestFind > 1 ? 's' : ''} en 30 s.`}</span></a>` : ''}
 
     ${cur ? `<a class="card link-card resume" href="#/game"><b>▶ Reprendre ta partie</b><span class="muted">contre l’ordinateur ${cur.elo} — ${Math.ceil(cur.moves.length / 2)} coups joués</span></a>` : ''}
 
@@ -90,7 +95,7 @@ export function render(root) {
 
     <section class="grid2">
       <a class="tile" href="#/play"><span>♟</span>Jouer</a>
-      <a class="tile" href="#/puzzles"><span>✦</span>Exercices</a>
+      <a class="tile" href="#/train"><span>✦</span>Entraînement</a>
       <a class="tile" href="#/learn"><span>❖</span>Cours & ouvertures</a>
       <a class="tile" href="#/profile"><span>📈</span>Mes progrès & chess.com</a>
     </section>

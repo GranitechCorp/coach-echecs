@@ -275,3 +275,7 @@ cg-board { border-radius: 4px; }
 .train-grid { display: flex; flex-direction: column; gap: 0; }
 .train-tile { display: flex; gap: 12px; align-items: flex-start; }
 .train-icon { font-size: 1.6rem; width: 2rem; text-align: center; flex: none; color: var(--accent); }
+
+.hero-est { margin-top: 6px; color: var(--text); }
+.vision-cta { border: 1px solid var(--accent2); }
+.train-status { color: var(--accent); }
