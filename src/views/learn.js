@@ -27,6 +27,7 @@ export function render(root) {
         <p>Choisis une ligne : <b>Apprendre</b> te montre les coups avec leurs explications, <b>S’entraîner</b> te demande de les jouer de mémoire. Les lignes reviennent en révision (1, 2, 4, 8 jours…) jusqu’à ce que tu les connaisses par cœur.</p>
         ${dueLines ? `<a class="btn primary" href="#/opening/due/train">Réviser les ${dueLines} lignes du jour</a>` : ''}
       </section>
+      <a class="card link-card" href="#/tree"><b>🌳 Mon arbre d’ouvertures</b><span class="muted small">Tes parties regroupées coup par coup, comme dans ChessBase : où tu sors de ton répertoire, ce que jouent tes adversaires, tes résultats dans chaque variante.</span></a>
       ${OPENING_GROUPS.map((g) => `
         <section class="card">
           <h2>${g.side === 'w' ? '⚪' : '⚫'} ${esc(g.name)}</h2>

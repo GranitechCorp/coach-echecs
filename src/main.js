@@ -8,6 +8,7 @@ import './styles/guess.css';
 import './styles/self-review.css';
 import './styles/review-intel.css';
 import './styles/blunder.css';
+import './styles/tree.css';
 
 import { load, touchStreak, update } from './storage.js';
 import * as home from './views/home.js';
@@ -29,6 +30,7 @@ import * as woodpecker from './views/woodpecker.js';
 import * as selfReview from './views/self-review.js';
 import * as guess from './views/guess.js';
 import * as blunder from './views/blunder.js';
+import * as tree from './views/tree.js';
 import { autoSync } from './chesscom.js';
 
 const routes = [
@@ -51,6 +53,7 @@ const routes = [
   [/^#\/selfreview\/([\w-]+)$/, selfReview],
   [/^#\/guess(?:\/([\w-]+))?$/, guess],
   [/^#\/gaffe(?:\/(\w+))?$/, blunder],
+  [/^#\/tree(?:\/([wb]))?$/, tree],
 ];
 
 const app = document.getElementById('app');
