@@ -65,7 +65,32 @@ export function createBoard(el, { orientation = 'white', onMove, coordinates = t
   // sur deux lignes, message d'erreur), elle devient fausse et le doigt tomberait sur la mauvaise case.
   // On la fait relire juste avant chaque toucher.
   const refreshBounds = () => cg.state.dom.bounds.clear();
-  for (const ev of ['touchstart', 'mousedown']) el.addEventListener(ev, refreshBounds, { capture: true, passive: true });
+  el.addEventListener('mousedown', refreshBounds, { capture: true, passive: true });
+  // Défilement : Chessground bloque le défilement dès que le doigt touche une pièce ou s'en approche, même une pièce
+  // adverse. L'échiquier couvrant la moitié de l'écran, la page ne défilait presque plus. On ne lui laisse le toucher
+  // que s'il sert à jouer : une de tes pièces (à un tiers de case près) ou une pièce déjà sélectionnée.
+  // Ailleurs, le doigt fait défiler la page.
+  const playable = (x, y) => {
+    const st = cg.state;
+    if (st.selected || st.draggable.current) return true;
+    const mine = st.movable.color;
+    if (!mine) return false;
+    const r = st.dom.bounds();
+    const d = r.width / 8 / 3;
+    return [[0, 0], [d, 0], [-d, 0], [0, d], [0, -d]].some(([dx, dy]) => {
+      const p = st.pieces.get(cg.getKeyAtDomPos([x + dx, y + dy]));
+      return p && (mine === 'both' || p.color === mine);
+    });
+  };
+  el.addEventListener(
+    'touchstart',
+    (e) => {
+      refreshBounds();
+      const t = e.touches[0];
+      if (e.touches.length === 1 && t && !playable(t.clientX, t.clientY)) e.stopPropagation();
+    },
+    { capture: true, passive: true },
+  );
 
   /** Synchronise l'affichage avec la partie. */
   function sync(lastMoveUci) {
