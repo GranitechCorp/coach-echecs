@@ -4,7 +4,8 @@ import { db, update } from '../storage.js';
 import { setTitle, esc, md, sleep } from '../ui.js';
 import { runPuzzle } from './puzzle-runner.js';
 import { BANK } from '../data/puzzle-bank-data.js';
-import { difficulty, mainTheme, solutionReview, duration, askConfirm } from './rush.js';
+import { colorName } from '../chessutil.js';
+import { difficulty, mainTheme, solutionReview, duration, askConfirm, isForced } from './rush.js';
 
 export const tab = 'puzzles';
 
@@ -59,6 +60,8 @@ function goalFor(w, n) {
   if (!prev?.finishedAt) return null;
   return Math.max(Math.round(prev.seconds / 2), w.set.length * MIN_SECONDS_PER_PUZZLE);
 }
+/** L'objectif est-il vraiment « la moitié » du cycle précédent (et pas le plancher de quelques secondes par exercice) ? */
+const goalIsHalf = (w, n) => Math.round((w.cycles[n - 2]?.seconds || 0) / 2) >= w.set.length * MIN_SECONDS_PER_PUZZLE;
 
 /** Pour l'intégrateur (accueil, programme) : où en est le lot en cours. */
 export function woodpeckerStatus() {
@@ -87,7 +90,8 @@ function buildSet(size) {
     progress = false;
     for (const g of groups.values()) {
       if (chosen.length >= size) break;
-      const p = g.find((x) => !taken.has(x.id) && Math.abs(difficulty(x) - center) <= 320);
+      // (isForced en dernier : calculé seulement pour les candidats retenus)
+      const p = g.find((x) => !taken.has(x.id) && Math.abs(difficulty(x) - center) <= 320 && !isForced(x));
       if (!p) continue;
       chosen.push(p);
       taken.add(p.id);
@@ -97,7 +101,10 @@ function buildSet(size) {
   // complété avec les plus proches de ton niveau
   if (chosen.length < size) {
     const rest = BANK.filter((p) => !taken.has(p.id)).sort((a, b) => dist.get(a.id) - dist.get(b.id));
-    chosen.push(...rest.slice(0, size - chosen.length));
+    for (const p of rest) {
+      if (chosen.length >= size) break;
+      if (!isForced(p)) chosen.push(p);
+    }
   }
   const order = new Map(chosen.map((p, i) => [p.id, i]));
   chosen.sort((a, b) => difficulty(a) - difficulty(b) || order.get(a.id) - order.get(b.id));
@@ -115,6 +122,15 @@ function longClock(s) {
 
 const fmtRatio = (r) => r.toFixed(1).replace('.', ',');
 
+/** « Tu as déjà travaillé 2 lots (jusqu’à 3 cycles bouclés). » */
+function archiveText(archive) {
+  const n = archive.length;
+  const best = Math.max(0, ...archive.map((a) => a.cycles || 0));
+  const lots = n > 1 ? `${n} lots` : 'un lot';
+  if (!best) return `Tu as déjà commencé ${lots} avant celui-ci.`;
+  return `Tu as déjà travaillé ${lots} (${n > 1 ? 'jusqu’à ' : ''}${best} cycle${best > 1 ? 's' : ''} bouclé${best > 1 ? 's' : ''}).`;
+}
+
 // ─── Écran ───
 
 export function render(root) {
@@ -124,13 +140,15 @@ export function render(root) {
   let review = null;
   let ticker = null;
   let solving = false;
+  let session = 0; // numéro de l'écran d'exercices affiché (évite qu'un ancien délai agisse sur un nouvel écran)
   let paused = false;
+  let between = false; // entre deux exercices (revue d'un raté, court délai après une réussite) : chrono arrêté
   let segStart = null; // début du morceau de temps en cours de comptage
   let lastActivity = Date.now();
   let alive = true;
   let dialog = null; // confirmation « Nouveau lot » ouverte
 
-  // ── Chrono : ne compte que le temps passé sur l'écran d'exercice ──
+  // ── Chrono : ne compte que le temps passé à chercher, sur l'écran d'exercice ──
   const takeElapsed = () => {
     if (segStart === null) return 0;
     const now = Date.now();
@@ -139,7 +157,7 @@ export function render(root) {
     return s;
   };
   function startCount() {
-    if (segStart !== null || !solving || paused || document.visibilityState !== 'visible') return;
+    if (segStart !== null || !solving || paused || between || document.visibilityState !== 'visible') return;
     if (curCycle(db().woodpecker)?.finishedAt) return; // cycle bouclé : le chrono est arrêté
     segStart = Date.now();
   }
@@ -154,7 +172,11 @@ export function render(root) {
   }
   const liveSeconds = () => (curCycle(db().woodpecker)?.seconds || 0) + (segStart !== null ? (Date.now() - segStart) / 1000 : 0);
 
-  const onVisibility = () => (document.visibilityState === 'visible' ? startCount() : stopCount());
+  const onVisibility = () => {
+    if (document.visibilityState !== 'visible') return stopCount();
+    lastActivity = Date.now(); // le temps passé hors de l'appli ne compte pas comme « sans toucher l'écran »
+    startCount();
+  };
   const onActivity = () => {
     lastActivity = Date.now();
   };
@@ -166,7 +188,9 @@ export function render(root) {
     dialog = null;
     stopCount();
     solving = false;
+    session++;
     paused = false;
+    between = false;
     clearInterval(ticker);
     ticker = null;
     runner?.destroy();
@@ -193,7 +217,7 @@ export function render(root) {
         <p class="muted small">Les exercices sont choisis autour de ton niveau (classement exercices : ${rating}), avec des thèmes variés, du plus facile au plus difficile. Le lot ne change plus ensuite : c’est le principe !</p>
         <button class="btn primary block" id="create">Créer mon lot et commencer</button>
       </section>
-      ${w.archive?.length ? `<p class="muted small center">Lots déjà travaillés : ${w.archive.length} · meilleur nombre de cycles : ${Math.max(...w.archive.map((a) => a.cycles))}</p>` : ''}`;
+      ${w.archive?.length ? `<p class="muted small center">${archiveText(w.archive)}</p>` : ''}`;
     root.querySelector('#sizes').addEventListener('click', (e) => {
       const b = e.target.closest('[data-n]');
       if (!b) return;
@@ -236,7 +260,7 @@ export function render(root) {
         <div class="row between small"><span>${w.pos} / ${total} exercices</span><span>⏱ ${esc(duration(c.seconds))}${acc !== null ? ` · 🎯 ${acc} %` : ''}</span></div>
         <p class="small">${
           goal
-            ? `🎯 Objectif : finir en moins de <b>${esc(duration(goal))}</b> (la moitié du cycle ${w.cycle - 1}), en gardant au moins 85 % de précision.`
+            ? `🎯 Objectif : finir en moins de <b>${esc(duration(goal))}</b> (${goalIsHalf(w, w.cycle) ? `la moitié du cycle ${w.cycle - 1}` : `environ ${MIN_SECONDS_PER_PUZZLE} secondes par exercice`}), en gardant au moins 85 % de précision.`
             : 'Premier cycle : prends ton temps et calcule chaque exercice jusqu’au bout. <b>La précision avant la vitesse.</b>'
         }</p>
         <button class="btn primary block" id="go">${w.pos ? `▶ Continuer (exercice ${w.pos + 1}/${total})` : `▶ Commencer le cycle ${w.cycle}`}</button>
@@ -339,7 +363,7 @@ export function render(root) {
     const list = ids.map((id) => byId.get(id)).filter(Boolean);
     if (k >= list.length) return showDashboard();
     review = solutionReview(root, list[k], {
-      intro: `Exercice raté ${k + 1} sur ${list.length}`,
+      intro: `Exercice raté ${k + 1} sur ${list.length} : trait aux ${colorName(list[k].fen.split(' ')[1])}.`,
       backLabel: k + 1 < list.length ? 'Suivant →' : '← Bilan du cycle',
       onBack: () => reviewMissed(ids, k + 1),
     });
@@ -353,6 +377,8 @@ export function render(root) {
     if (!w.set.length) return showIntro();
     if (w.pos >= w.set.length) return showDashboard();
     solving = true;
+    const my = session; // stopAll() l'a déjà incrémenté : cet écran est le seul valide
+    const here = () => solving && alive && session === my;
     lastActivity = Date.now();
     const total = w.set.length;
     const goal = goalFor(w, w.cycle);
@@ -396,8 +422,8 @@ export function render(root) {
     }
 
     function tick() {
-      if (!solving) return;
-      if (!paused && Date.now() - lastActivity > IDLE_PAUSE) pause(true);
+      if (!here()) return;
+      if (!paused && segStart !== null && Date.now() - lastActivity > IDLE_PAUSE) pause(true);
       const s = liveSeconds();
       const el = root.querySelector('#wp-clock');
       if (el) el.textContent = longClock(s);
@@ -446,12 +472,18 @@ export function render(root) {
     }
 
     function nextPuzzle() {
+      if (!here()) return;
       review?.destroy();
       review = null;
       runner?.destroy();
       runner = null;
       const x = db().woodpecker;
       if (x.pos >= x.set.length) return showDashboard();
+      if (between) {
+        between = false;
+        lastActivity = Date.now();
+        startCount(); // exercice suivant : le chrono repart
+      }
       const p = byId.get(x.set[x.pos]);
       refreshHud();
       window.scrollTo(0, 0);
@@ -460,24 +492,29 @@ export function render(root) {
         solution: p.solution,
         compact: true,
         strict: true,
-        prompt: `Trait aux ${p.fen.split(' ')[1] === 'w' ? 'Blancs' : 'Noirs'} : trouve le meilleur coup.`,
+        prompt: `Trait aux ${colorName(p.fen.split(' ')[1])} : trouve le meilleur coup.`,
         onSolved: async () => {
-          if (!solving) return;
+          if (!here()) return;
           record(p, true);
+          stopCount();
+          between = true;
           await sleep(500);
-          if (solving && alive) nextPuzzle();
+          if (here()) nextPuzzle();
         },
         onFail: async ({ played, shown }) => {
-          if (!solving) return;
+          if (!here()) return;
           record(p, false, played);
+          // pendant la revue de la solution, le chrono est arrêté : prends le temps de comprendre
+          stopCount();
+          between = true;
           await shown;
-          if (!solving || !alive) return;
+          if (!here()) return;
           runner?.destroy();
           runner = null;
           const last = db().woodpecker.pos >= total;
           review = solutionReview(zone, p, {
             played,
-            intro: 'Raté : regarde bien la solution avant de passer à la suite.',
+            intro: 'Raté. Le chrono est arrêté : prends le temps de bien comprendre la solution.',
             backLabel: last ? 'Bilan du cycle →' : 'Suivant →',
             onBack: nextPuzzle,
             autoplay: true,

@@ -72,3 +72,6 @@ b.g-miss { color: var(--g-miss); }
 .guess-missed { text-align: left; }
 .guess-end .actions { margin-top: 12px; }
 .guess-pov { margin: -4px 0 8px; }
+/* La question garde la même hauteur (une ou deux lignes) : l'échiquier ne saute pas d'un coup à l'autre. */
+.guess-prompt-row { min-height: 2.9em; align-items: center; }
+.guess-side-rec { color: var(--accent); font-weight: 600; }

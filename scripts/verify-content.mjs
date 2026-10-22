@@ -73,15 +73,16 @@ const ENGLISH_SAN = /(^|[\s(«…'’"/])(?:[KQNB][a-h]?[1-8]?x?[a-h][1-8])/;
 
 /** Textes visibles : pas de HTML, pas de « undefined », pas de notation anglaise. */
 function checkTexts(lesson, step, k) {
+  const where = k >= 0 ? `étape ${k + 1}` : 'leçon';
   const fields = [step.text, step.hint, step.success, step.question, step.explain, step.link?.label, ...(step.choices || [])];
   for (const t of fields) {
     if (t === undefined) continue;
-    if (typeof t !== 'string' || !t.trim()) fail(`${lesson.id} (étape ${k + 1}) : texte vide ou invalide`);
-    else if (/<\/?[a-z][^>]*>/i.test(t)) fail(`${lesson.id} (étape ${k + 1}) : balise HTML dans le texte « ${t.slice(0, 40)}… »`);
-    else if (/\b(undefined|null|NaN)\b/.test(t)) fail(`${lesson.id} (étape ${k + 1}) : texte suspect « ${t.slice(0, 40)}… »`);
-    else if (ENGLISH_SAN.test(t)) fail(`${lesson.id} (étape ${k + 1}) : notation anglaise « ${t.match(ENGLISH_SAN)[0].trim()} » (utilise C, F, T, D, R)`);
+    if (typeof t !== 'string' || !t.trim()) fail(`${lesson.id} (${where}) : texte vide ou invalide`);
+    else if (/<\/?[a-z][^>]*>/i.test(t)) fail(`${lesson.id} (${where}) : balise HTML dans le texte « ${t.slice(0, 40)}… »`);
+    else if (/\b(undefined|null|NaN)\b/.test(t)) fail(`${lesson.id} (${where}) : texte suspect « ${t.slice(0, 40)}… »`);
+    else if (ENGLISH_SAN.test(t)) fail(`${lesson.id} (${where}) : notation anglaise « ${t.match(ENGLISH_SAN)[0].trim()} » (utilise C, F, T, D, R)`);
   }
-  if (step.link && !/^#\//.test(step.link.href || '')) fail(`${lesson.id} (étape ${k + 1}) : lien invalide ${step.link.href}`);
+  if (step.link && !/^#\//.test(step.link.href || '')) fail(`${lesson.id} (${where}) : lien invalide ${step.link.href}`);
 }
 
 /** Évaluation de départ, du point de vue du camp au trait. */
@@ -100,6 +101,10 @@ async function checkLessons() {
     const counts = { play: 0, square: 0, quiz: 0 };
     if (!MODULES.some((m) => m.id === lesson.module)) fail(`${lesson.id} : module inconnu ${lesson.module}`);
     if (LESSONS.filter((l) => l.id === lesson.id).length > 1) fail(`${lesson.id} : identifiant en double`);
+    if (!/^[a-z0-9-]+$/.test(lesson.id)) fail(`${lesson.id} : identifiant invalide (lettres minuscules, chiffres et tirets)`);
+    if (!lesson.title?.trim() || !Number.isFinite(lesson.minutes)) fail(`${lesson.id} : titre ou durée manquants`);
+    if (!lesson.steps?.length) fail(`${lesson.id} : aucune étape`);
+    checkTexts(lesson, { text: lesson.title, success: lesson.practiceText, link: lesson.practice }, -1);
     for (const [k, step] of lesson.steps.entries()) {
       checkTexts(lesson, step, k);
       if (!['text', 'puzzle', 'quiz', 'play', 'square'].includes(step.type)) fail(`${lesson.id} (étape ${k + 1}) : type inconnu ${step.type}`);
@@ -152,6 +157,18 @@ async function checkLessons() {
           fail(`${lesson.id} (étape ${k + 1}) : exercice sans solution`);
           continue;
         }
+        // « Mat en N » annoncé : N coups à trouver, et la suite finit bien par un mat
+        const announced = /\bmat en (\d+)/i.exec(step.text || '');
+        if (announced) {
+          const end = new Chess(c.fen());
+          try {
+            for (const u of step.solution) end.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] });
+          } catch {
+            /* coup illégal : signalé plus bas */
+          }
+          if (+announced[1] !== Math.ceil(step.solution.length / 2) || !end.isCheckmate())
+            fail(`${lesson.id} (étape ${k + 1}) : « ${announced[0]} » annoncé, mais la solution fait ${Math.ceil(step.solution.length / 2)} coup(s)${end.isCheckmate() ? '' : ' sans finir par un mat'}`);
+        }
         // chaque coup « à trouver » doit être le meilleur (ou aussi bon)
         for (let i = 0; i < step.solution.length; i++) {
           const uci = step.solution[i];
@@ -176,10 +193,29 @@ async function checkLessons() {
             if (c2.isCheckmate()) mine = 10000;
             else if (c2.isGameOver()) mine = 0;
             else mine = -scoreOf((await engine.analyse(c2.fen(), { depth: DEPTH }))[0]);
-            // si le moteur choisit lui-même ce coup, il est le meilleur (les deux évaluations peuvent différer un peu)
-            if (best.pv[0] !== uci && bs - mine > 40 && !(bs > 9000 && mine > 9000)) fail(`${lesson.id} : ${uci} n'est pas le meilleur (${mine} contre ${bs} pour ${best.pv[0]}) — ${fen}`);
+            // si le moteur choisit lui-même ce coup, il est le meilleur (les deux évaluations peuvent différer un peu) ;
+            // dans une position déjà gagnante, l'évaluation varie d'une analyse à l'autre : tolérance de 20 %
+            const tol = Math.max(40, bs >= 300 && mine >= 300 ? bs * 0.2 : 0);
+            if (best.pv[0] !== uci && bs - mine > tol && !(bs > 9000 && mine > 9000)) fail(`${lesson.id} : ${uci} n'est pas le meilleur (${mine} contre ${bs} pour ${best.pv[0]}) — ${fen}`);
             if (!step.allowOthers && second && i === 0 && scoreOf(second) > bs - 120 && !(bs > 9000 && scoreOf(second) < 9000) && bs < 9000) {
               console.log(`    ⚠ ${lesson.id} : solution non unique (${best.pv[0]} ${bs} / ${second.pv[0]} ${scoreOf(second)}) — ${fen}`);
+            }
+          } else {
+            // coup de l'adversaire joué automatiquement : il doit être une défense raisonnable, sinon l'exercice montre
+            // une suite que personne ne jouerait (simple avertissement : plusieurs défenses peuvent se valoir)
+            const [best] = await engine.analyse(fen, { depth: DEPTH });
+            const c2 = new Chess(fen);
+            let reply = null;
+            try {
+              reply = c2.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+            } catch {
+              /* signalé plus bas */
+            }
+            if (best && reply && best.pv[0] !== uci) {
+              const after = c2.isCheckmate() ? -10000 : c2.isGameOver() ? 0 : -scoreOf((await engine.analyse(c2.fen(), { depth: DEPTH }))[0]);
+              const bs = scoreOf(best);
+              if (bs - after > 150 && !(bs < -9000 && after < -9000))
+                console.log(`    ⚠ ${lesson.id} (étape ${k + 1}) : la réponse adverse ${uci} n’est pas la meilleure défense (${after} contre ${bs} pour ${best.pv[0]}), normal si l’exercice montre un piège — ${fen}`);
             }
           }
           try {

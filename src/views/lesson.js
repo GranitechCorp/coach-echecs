@@ -1,10 +1,10 @@
 // Une leçon : étapes de texte, exercices, quiz, repérage de cases et positions à jouer contre l'ordinateur.
 import { Chess } from 'chess.js';
-import { update } from '../storage.js';
+import { db, update } from '../storage.js';
 import { setTitle, esc, md, moveSound, sleep } from '../ui.js';
 import { createBoard, arrow } from '../board.js';
 import { lessonById, LESSONS } from '../data/lessons.js';
-import { stepFen, cgColor, playUci, gameOverText, cpWhite, uciToSan, fig } from '../chessutil.js';
+import { stepFen, cgColor, playUci, gameOverText, cpWhite, uciToSan, fig, material } from '../chessutil.js';
 import { getBotEngine, getAnalysisEngine } from '../engine.js';
 import { runPuzzle } from './puzzle-runner.js';
 
@@ -12,6 +12,31 @@ export const tab = 'learn';
 
 const toShapes = (shapes = []) =>
   shapes.map(([a, brush]) => (a.length === 4 ? arrow(a, brush) : { orig: a, brush }));
+
+/**
+ * Typographie française : espace insécable avant « : ; ! ? » et à l'intérieur des guillemets,
+ * et entre un nombre et le mot qui suit (« 2 minutes », « Td8 mat ») : jamais de « ou de ! seul en début de ligne.
+ * (pas entre deux coups : « e4 e5 » ou « c6 bxc6 » doivent pouvoir passer à la ligne)
+ */
+const nb = (s) =>
+  typeof s === 'string'
+    ? s
+        .replace(/« /g, '«\u00a0')
+        .replace(/ ([»:;!?])/g, '\u00a0$1')
+        .replace(/(\d) (?=\p{Ll}+(?![\p{L}\d]))/gu, '$1\u00a0')
+    : s;
+/** Mêmes textes, espaces insécables en plus (le reste de l'étape est inchangé). */
+const nbStep = (st) => {
+  const out = { ...st };
+  for (const f of ['text', 'question', 'explain', 'hint', 'success']) if (out[f]) out[f] = nb(out[f]);
+  if (out.choices) out.choices = out.choices.map(nb);
+  if (out.link) out.link = { ...out.link, label: nb(out.link.label) };
+  return out;
+};
+/** Le son des coups suit le réglage « Son » (comme dans les exercices). */
+const sound = (capture) => {
+  if (db().settings?.sound !== false) moveSound(capture);
+};
 
 /** Bouton facultatif sous une étape : link: { href: '#/vision', label: '…' } */
 // (sous l'étape, une marge de 48 px : la barre « Précédent / Suivant » remonte d'environ 42 px sur la fin du contenu
@@ -31,7 +56,7 @@ export function render(root, id) {
   function renderStep() {
     cleanupStep?.();
     cleanupStep = null;
-    const st = lesson.steps[k];
+    const st = nbStep(lesson.steps[k]);
     const last = k === lesson.steps.length - 1;
     root.innerHTML = `
       <div class="steps">${lesson.steps.map((_, i) => `<span class="${i < k ? 'done' : i === k ? 'cur' : ''}"></span>`).join('')}</div>
@@ -85,7 +110,7 @@ export function render(root, id) {
         if (!ok) b.classList.add('bad');
         const fb = el.querySelector('.feedback');
         fb.className = 'feedback ' + (ok ? 'ok' : 'ko');
-        fb.innerHTML = (ok ? '✓ Exact ! ' : '✗ Pas tout à fait. ') + md(st.explain);
+        fb.innerHTML = nb(ok ? '✓ Exact ! ' : '✗ Pas tout à fait. ') + md(st.explain);
       });
     } else if (st.type === 'puzzle') {
       const p = runPuzzle(el, { ...st, fen, prompt: st.text });
@@ -109,7 +134,7 @@ export function render(root, id) {
     cleanupStep = null;
     root.innerHTML = `<section class="card center">
       <div class="big">🎓</div><h2>Leçon terminée !</h2>
-      <p>${esc(lesson.practiceText || 'Pour ancrer ce que tu viens d’apprendre, fais quelques exercices sur le même thème.')}</p>
+      <p>${esc(nb(lesson.practiceText || 'Pour ancrer ce que tu viens d’apprendre, fais quelques exercices sur le même thème.'))}</p>
       <div class="row wrap center">
         <a class="btn primary" href="${esc(practice.href)}">${esc(practice.label)}</a>
         ${next ? `<a class="btn" href="#/lesson/${next.id}">Leçon suivante : ${esc(next.title)}</a>` : ''}
@@ -186,7 +211,7 @@ function squareStep(el, st, fen) {
 
   function say(html, cls = '') {
     fb.className = 'feedback ' + cls;
-    fb.innerHTML = html;
+    fb.innerHTML = nb(html);
   }
 
   function showTarget() {
@@ -202,7 +227,7 @@ function squareStep(el, st, fen) {
     done++;
     if (key === target) {
       mark({ [key]: true });
-      say(`✓ ${esc(key)} : case ${isDark(key) ? 'foncée' : 'claire'}`, 'ok');
+      say(`✓ ${esc(key)}\u00a0: case ${isDark(key) ? 'foncée' : 'claire'}`, 'ok');
       return next(450);
     }
     errors++;
@@ -225,11 +250,11 @@ function squareStep(el, st, fen) {
       mark({});
       if (queue.length) return showTarget();
       const secs = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
-      ask.innerHTML = errors ? `<b>Terminé : ${plural(errors, 'erreur')}</b>` : '<b class="good-txt">🎉 Parfait : aucune erreur !</b>';
+      ask.innerHTML = errors ? `<b>Terminé\u00a0: ${plural(errors, 'erreur')}</b>` : '<b class="good-txt">🎉 Parfait\u00a0: aucune erreur\u00a0!</b>';
       say(
         errors
-          ? `À revoir : ${missed.map(esc).join(', ')}. Recommence pour viser zéro faute (${secs} s).`
-          : `${plural(total, 'case')} trouvée${total > 1 ? 's' : ''} en ${secs} s. Refais-le demain pour aller encore plus vite.`,
+          ? `À revoir\u00a0: ${missed.map(esc).join(', ')}. Recommence pour viser zéro faute (${secs}\u00a0s).`
+          : `${plural(total, 'case')} trouvée${total > 1 ? 's' : ''} en ${secs}\u00a0s. Refais-le demain pour aller encore plus vite.`,
         errors ? 'ko' : 'ok',
       );
     }, ms);
@@ -262,7 +287,7 @@ function playStep(el, st, fen) {
       ? `tenir la nulle pendant ${toHold} coups (un pat, une répétition ou la prise du dernier pion comptent aussi)`
       : `${goal === 'mate' ? 'faire mat' : 'aller à dame'}${st.maxMoves ? ` en ${st.maxMoves} coups maximum` : ''}`;
   el.innerHTML = `
-    <section class="card lesson-text">${md(st.text)}<p class="muted small">Objectif : ${esc(goalText)}.</p></section>
+    <section class="card lesson-text">${md(st.text)}<p class="muted small">${esc(nb(`Objectif : ${goalText}.`))}</p></section>
     <div class="board-row"><div class="board-box" id="b"></div></div>
     <div class="feedback" aria-live="polite"></div>
     <div class="actions"><button class="btn" id="undo" hidden>↶ Reprendre mon coup</button><button class="btn" id="reset">↻ Recommencer</button></div>`;
@@ -279,7 +304,7 @@ function playStep(el, st, fen) {
 
   function say(html, cls = '') {
     fb.className = 'feedback ' + cls;
-    fb.innerHTML = html;
+    fb.innerHTML = nb(html);
   }
 
   function end(html, ok, canUndo = false) {
@@ -289,26 +314,40 @@ function playStep(el, st, fen) {
     undoBtn.hidden = !canUndo;
   }
 
-  const progress = () => (goal === 'draw' ? `<span class="muted">Coups tenus : ${count} / ${toHold}</span>` : '');
+  const progress = () => (goal === 'draw' ? `<span class="muted">Coups tenus\u00a0: ${count} / ${toHold}</span>` : '');
+  /** Nulle : l'adversaire n'a plus de pion et pas plus de matériel que toi (tour contre tour…) : il ne peut plus gagner. */
+  const cannotWin = () => {
+    const them = me === 'w' ? 'b' : 'w';
+    const mat = material(chess);
+    return !chess.findPiece({ type: 'p', color: them }).length && (mat[them] <= mat[me] || mat[them] <= 3);
+  };
   const overText = () => esc(gameOverText(chess) || 'Partie terminée');
   const retakeText = () =>
     retakes ? ` (avec ${retakes} coup${retakes > 1 ? 's' : ''} repris : recommence pour réussir sans aide)` : '';
 
-  /** Raté : le coup est annulé, flèche rouge sur ton coup et flèche verte sur celui qu'il fallait jouer. */
-  async function failed(played, why, g) {
+  /**
+   * Raté : le coup est annulé. Flèche rouge sur ton coup, orange sur la réponse qui le punissait,
+   * verte sur celui qu'il fallait jouer.
+   */
+  async function failed(played, why, g, refutation) {
     retakes++;
+    const after = chess.fen();
+    const punish = refutation ? `${me === 'w' ? '…' : ''}${fig(uciToSan(after, refutation))}` : '';
+    const whyFull = punish ? `${why} Sa réponse : <b>${esc(punish)}</b> (flèche orange).` : why;
+    const shapes = [arrow(played, 'red'), ...(refutation ? [arrow(refutation, 'yellow')] : [])];
     chess.undo();
     count--;
     board.setPosition(chess, { interactive: null });
-    board.setShapes([arrow(played, 'red')]);
-    say(`${why} <span class="muted">Je cherche un meilleur coup…</span>`, 'ko');
+    board.setShapes(shapes);
+    say(`${whyFull} <span class="muted">Je cherche un meilleur coup…</span>`, 'ko');
     const before = chess.fen();
     const r = await getAnalysisEngine().search(before, { depth: 12 });
     if (!alive || g !== gen) return;
     const best = r.bestmove && r.bestmove !== played ? r.bestmove : null;
     board.setPosition(chess, { interactive: me });
-    board.setShapes(best ? [arrow(played, 'red'), arrow(best, 'green')] : [arrow(played, 'red')]);
-    say(`${why} Ton coup est annulé${best ? ` : il fallait plutôt jouer <b>${esc(fig(uciToSan(before, best)))}</b> (flèche verte)` : ''}. À toi !`, 'ko');
+    // la flèche verte d'abord : ton coup (rouge) et sa réponse (orange) restent visibles par-dessus
+    board.setShapes(best ? [arrow(best, 'green'), ...shapes] : shapes);
+    say(`${whyFull} Ton coup est annulé${best ? ` : essaie plutôt <b>${esc(fig(uciToSan(before, best)))}</b> (flèche verte)` : ''}. À toi !`, 'ko');
   }
 
   async function onMove(uci) {
@@ -316,14 +355,14 @@ function playStep(el, st, fen) {
     const m = playUci(chess, uci);
     if (!m) return board.sync();
     const g = gen;
-    moveSound(!!m.captured);
+    sound(!!m.captured);
     count++;
     board.setShapes([]);
     board.setPosition(chess, { interactive: null });
     const played = m.from + m.to + (m.promotion || '');
     if (chess.isCheckmate()) {
       if (goal === 'draw') return end(`🎉 Mat ! Tu as fait encore mieux que la nulle${retakeText()}.`, true);
-      return end(`🎉 Mat en ${count} coups${retakeText()} ! ${st.maxMoves && count > st.maxMoves ? 'Essaie maintenant de faire plus court.' : 'Parfait.'}`, true);
+      return end(`🎉 Mat en ${count} coups${retakeText()} !${st.maxMoves && count > st.maxMoves ? ' Essaie maintenant de faire plus court.' : retakes ? '' : ' Parfait.'}`, true);
     }
     if (chess.isStalemate()) {
       if (goal === 'draw') return end(`🎉 Pat : c’est nulle. Objectif atteint${retakeText()} !`, true);
@@ -334,8 +373,10 @@ function playStep(el, st, fen) {
       if (goal === 'draw') return end(`🎉 ${overText()} : objectif atteint${retakeText()} !`, true);
       return end(`${overText()}. Reprends ton coup ou recommence !`, false, true);
     }
+    // (efface aussi le message d'un coup repris : il ne doit pas rester affiché pendant que l'ordinateur réfléchit)
     if (goal === 'draw') say(`${progress()} <span class="muted">· l’ordinateur réfléchit…</span>`);
     else if (st.maxMoves && count === st.maxMoves + 1) say(`Tu as dépassé ${st.maxMoves} coups : continue, puis recommence pour faire mieux.`);
+    else say('');
     const r = await engine.search(chess.fen(), { depth: 14 });
     await sleep(250);
     if (!alive || g !== gen) return;
@@ -346,20 +387,26 @@ function playStep(el, st, fen) {
         goal === 'draw'
           ? '✗ Après ce coup, l’ordinateur aurait une position gagnante : la nulle t’échappait.'
           : '✗ Après ce coup, ton avantage fondait : l’adversaire revenait dans la partie.';
-      return failed(played, why, g);
+      return failed(played, why, g, r.bestmove);
     }
+    if (goal === 'draw' && m.captured === 'p' && cannotWin())
+      return end(`🎉 Tu as pris son dernier pion : sans pion, il ne peut plus gagner. Nulle assurée${retakeText()} !`, true);
     if (goal === 'draw' && count >= toHold)
       return end(retakes ? `🎉 Nulle tenue pendant ${count} coups${retakeText()}.` : `🎉 Nulle tenue : ${count} coups sans craquer face à Stockfish !`, true);
     if (!r.bestmove) return end(overText(), goal === 'draw');
     const reply = playUci(chess, r.bestmove);
-    if (reply) moveSound(!!reply.captured);
+    if (reply) sound(!!reply.captured);
     board.setPosition(chess, { interactive: me });
     if (chess.isCheckmate()) return end(`${overText()}. Reprends ton coup ou recommence !`, false, true);
     if (chess.isGameOver()) {
       if (goal === 'draw') return end(`🎉 ${overText()} : objectif atteint${retakeText()} !`, true);
       return end(`${overText()}. Reprends ton coup ou recommence !`, false, true);
     }
-    if (goal === 'promote' && reply?.captured === 'p') return end('Ton pion est tombé… Reprends ton coup ou recommence !', false, true);
+    if (goal === 'promote' && reply?.captured === 'p') {
+      const left = chess.findPiece({ type: 'p', color: me }).length;
+      if (!left) return end('Ton dernier pion est tombé… Reprends ton coup ou recommence !', false, true);
+      say(`Ton pion ${reply.to} est tombé : il t’en reste ${left}. S’il a servi de leurre, c’est le plan : continue !`);
+    }
     if (goal === 'draw') say(progress());
   }
 
@@ -386,9 +433,10 @@ function playStep(el, st, fen) {
     over = false;
     undoBtn.hidden = true;
     board.setShapes([]);
-    say('');
+    say(progress());
     board.setPosition(chess, { interactive: me });
   };
+  say(progress());
   return () => {
     alive = false;
     board.destroy();

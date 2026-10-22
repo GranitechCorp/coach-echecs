@@ -48,6 +48,8 @@
 .rush-stats > div { display: flex; flex-direction: column; align-items: center; min-width: 0; }
 .rush-stats b { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
 .rush-stats small { font-size: 0.72rem; line-height: 1.2; }
+.rush-end-stats { grid-template-columns: 1fr 1fr 1.2fr 1.5fr; }
+.rush-end-stats > div:last-child b { white-space: nowrap; font-size: 1.05rem; line-height: 1.45; }
 .rush-tip { margin-bottom: 0; }
 .rush-miss > span:first-child { flex: 1; min-width: 0; }
 .rush-miss .btn { flex: none; pointer-events: none; }
@@ -56,7 +58,8 @@
 /* ─── Woodpecker ─── */
 .wp-intro h2 { margin-bottom: 4px; }
 .wp-status h2, .wp-done h2 { margin: 0; }
-.wp-done .rush-stats { margin: 10px 0; }
+.wp-done .rush-stats { margin: 10px 0; grid-template-columns: 1.6fr 1fr 1fr 1fr; }
+.wp-done .rush-stats > div:first-child b { white-space: nowrap; font-size: 1.05rem; line-height: 1.45; }
 .wp-how summary { cursor: pointer; padding: 2px 0; }
 .wp-how[open] summary { margin-bottom: 6px; }
 .wp-table td:first-child { white-space: nowrap; }

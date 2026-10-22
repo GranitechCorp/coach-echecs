@@ -71,7 +71,7 @@ export function pliesOf(game) {
     .map((san, i) => {
       const fen = c.fen();
       const m = c.move(san);
-      return { i, fen, san: m.san, uci: uciOf(m), color: m.color, from: m.from, to: m.to, captured: m.captured || null };
+      return { i, fen, san: m.san, uci: uciOf(m), color: m.color, piece: m.piece, from: m.from, to: m.to, captured: m.captured || null };
     });
 }
 
@@ -97,6 +97,22 @@ function materialSwing(plies, i) {
 }
 
 /**
+ * « Cloue X sur son roi : il ne peut plus bouger » est faux quand la pièce clouée peut glisser sur la ligne
+ * du clouage (une dame, une tour sur une colonne, un fou sur une diagonale) : on dit alors ce qui est vrai.
+ * pinner : case de la pièce qui cloue ; board : position après le coup.
+ */
+function pinFix(f, pinner, board) {
+  const m = f.match(/^Cloue (la|le) (\S+) en ([a-h][1-8]) sur son roi : (?:il|elle) ne peut plus bouger\.$/);
+  if (!m) return f;
+  const sq = m[3];
+  const t = board.get(sq)?.type;
+  const straight = sq[0] === pinner[0] || sq[1] === pinner[1];
+  if (!(t === 'q' || (t === 'r' && straight) || (t === 'b' && !straight))) return f;
+  const line = !straight ? 'cette diagonale' : sq[0] === pinner[0] ? 'cette colonne' : 'cette rangée';
+  return `Cloue ${m[1]} ${m[2]} en ${sq} sur son roi : ${m[1] === 'la' ? 'elle' : 'il'} ne peut plus quitter ${line}.`;
+}
+
+/**
  * Explication du coup i : le commentaire de la partie, sinon un ou deux faits observés sur l'échiquier
  * (describeMove), filtrés avec la suite réelle de la partie pour ne rien affirmer de faux.
  */
@@ -114,7 +130,8 @@ export function explainPly(game, plies, i, max = 2) {
   const end = positionOf(plies, plies.length);
   const poisoned = p.captured && plies.length - 1 - i <= 4 && end.isCheckmate() && end.turn() === p.color;
   if (recapture) facts = [`Reprend en ${p.to}.`, ...facts.filter((f) => !f.startsWith('Prend'))];
-  else if (poisoned) facts = [`Prend ${theName(p.captured)} en ${p.to}, mais c’est un cadeau empoisonné : regarde la suite.`, ...facts.filter((f) => !f.startsWith('Prend'))];
+  // (rien d'autre à dire : le reste détournerait l'attention du mat qui arrive)
+  else if (poisoned) return `Prend ${theName(p.captured)} en ${p.to}, mais c’est un cadeau empoisonné : regarde la suite.`;
   // « matériel gratuit », « échange favorable » : on vérifie avec la suite réelle de la partie (fin d'un échange ?)
   else if (d.tags.has('gain') && materialSwing(plies, i) < 2) facts = facts.map((f) => (/^Prend .*:/.test(f) ? `Prend ${theName(p.captured)} en ${p.to}.` : f));
   // fourchette : il faut au moins deux pièces visées (le roi compte, pas les pions), sinon c'est une attaque double
@@ -131,8 +148,8 @@ export function explainPly(game, plies, i, max = 2) {
     const rear = sq && after.get(sq);
     return !!rear && (VALUE[rear.type] > moved || !after.attackers(sq, rear.color).length);
   });
-  // la pièce qui fait la fourchette (ou l'enfilade) est prise tout de suite : la menace ne compte plus
-  if (next?.captured && next.to === p.to) facts = facts.filter((f) => !/^(Fourchette|Attaque double|Enfilade)/.test(f));
+  // la pièce qui fait la fourchette (l'enfilade, le clouage) est prise tout de suite : la menace ne compte plus
+  if (next?.captured && next.to === p.to) facts = facts.filter((f) => !/^(Fourchette|Attaque double|Enfilade|Cloue)/.test(f));
   // « en prise » / « sans protection » : le test de describeMove est statique et se trompe souvent sur un coup
   // de partie modèle. On ne le garde que si la pièce est vraiment prise au coup suivant.
   const warn = (f) => /^(Attention|Laisse)/.test(f);
@@ -149,8 +166,12 @@ export function explainPly(game, plies, i, max = 2) {
     return b ? `Laisse ${b[1]} sans protection : c’est voulu, regarde la suite.` : f;
   };
   facts = [...facts.filter((f) => !warn(f)), ...(p.color === game.side ? warnings.map(sacrifice) : warnings)];
-  // « la pièce était attaquée » ne convient pas à un pion
-  facts = facts.map((f) => f.replace(/^Met le pion à l’abri : la pièce était attaquée\./, 'Met le pion à l’abri : il était attaqué.'));
+  // « la pièce était attaquée » ne convient pas à un pion ; « en partant, la pièce » : on nomme la pièce
+  facts = facts.map((f) =>
+    pinFix(f, p.to, after)
+      .replace(/^Met le pion à l’abri : la pièce était attaquée\./, 'Met le pion à l’abri : il était attaqué.')
+      .replace(/en partant, la pièce libère/, `en partant, ${theName(p.piece)} libère`),
+  );
   // rien à dire de sûr : on invite à chercher l'idée, sans rien inventer
   if (!facts.length && max > 1) {
     return d.facts.some((f) => !warn(f))
@@ -161,6 +182,11 @@ export function explainPly(game, plies, i, max = 2) {
 }
 
 const moveNo = (i) => `${Math.floor(i / 2) + 1}${i % 2 === 0 ? '.' : '…'}`;
+/** Numéro du prochain coup à deviner pour ce camp à partir du demi-coup ply (reprise d'une partie). */
+const nextMoveNo = (g, side, ply) => {
+  const i = (ply % 2 === 0) === (side === 'w') ? ply : ply + 1;
+  return Math.floor(Math.min(i, sansOf(g).length - 1) / 2) + 1;
+};
 /** « 0,7 pion », « 2,4 pions » */
 const pawns = (cp) => `${(Math.abs(cp) / 100).toFixed(1).replace('.', ',')} pion${Math.abs(cp) >= 200 ? 's' : ''}`;
 /** « 0 raté », « 1 raté », « 3 ratés » (en français, 0 et 1 restent au singulier) */
@@ -179,11 +205,17 @@ const sigOf = (g) => {
   for (let k = 0; k < g.moves.length; k++) h = (Math.imul(h, 33) + g.moves.charCodeAt(k)) >>> 0;
   return `${sansOf(g).length}:${h.toString(36)}`;
 };
-const subtitle = (g) => (g.group === 'classiques' ? `${g.white} – ${g.black} · ${g.event}` : g.opening);
+const shortTitle = (g) => g.title.replace(/^Partie modèle : /, '');
+/** Sous-titre : joueurs et lieu, ou l'ouverture (sauf si le titre la donne déjà). */
+const subtitle = (g) => (g.group === 'classiques' ? `${g.white} – ${g.black} · ${g.event}` : g.opening.toLowerCase() === shortTitle(g).toLowerCase() ? '' : g.opening);
+/** « de Donald Byrne », « d’Adolf Anderssen », « du duc de Brunswick et du comte Isouard » */
+const ofPlayer = (who) =>
+  who.replace(/^Le /, 'du ').replace(/ et le /g, ' et du ').replace(/^La /, 'de la ').replace(/^(?!du |de la )([AEIOUYÉÈ])/, 'd’$1').replace(/^(?!du |de la |d’)/, 'de ');
 /** « quel coup a joué Paul Morphy », « quel coup ont joué le duc de Brunswick et le comte Isouard » */
 const whoPlayed = (who) => `quel coup ${/ et /.test(who) ? 'ont' : 'a'} joué <b>${esc(who.replace(/^(Le|La|Les) /, (w) => w.toLowerCase()))}</b>`;
 
-function encouragement(pct) {
+function encouragement(pct, allExact) {
+  if (allExact) return 'Parfait ! Tu as trouvé tous les coups de la partie : rejoue-la avec l’autre camp pour voir le combat de l’autre côté.';
   if (pct >= 80) return 'Remarquable ! Tu as très souvent pensé comme le joueur modèle : tes plans sont solides.';
   if (pct >= 60) return 'Très bien ! Tu as compris la plupart des idées. Relis les commentaires des coups ratés pour compléter.';
   if (pct >= 40) return 'Bon travail : chaque coup raté est une idée nouvelle. Rejoue cette partie dans quelques jours, tu verras la différence.';
@@ -200,9 +232,9 @@ function renderList(root) {
     const side = p?.side || g.side;
     const prog = p ? ' <span class="badge guess-badge">en cours</span>' : '';
     return `<a class="list-item guess-item" href="#/guess/${esc(g.id)}">
-      <span class="guess-item-txt"><b>${esc(g.title)}</b><small class="muted">${esc(subtitle(g))}</small>
+      <span class="guess-item-txt"><b>${esc(shortTitle(g))}</b>${subtitle(g) ? `<small class="muted">${esc(subtitle(g))}</small>` : ''}
         <small>${p ? 'Tu joues' : 'Conseillé :'} les ${colorName(side)} · ${countFor(g, side)} coups à trouver${prog}</small></span>
-      <span class="guess-best">${r?.best != null ? `<b>${r.best}&nbsp;%</b><small class="muted">record</small>` : '<small class="muted">à faire</small>'}</span>
+      <span class="guess-best">${r?.best != null ? `<b>${r.best}&nbsp;%</b><small class="muted">record</small>` : p ? '' : '<small class="muted">à faire</small>'}</span>
     </a>`;
   };
   root.innerHTML = `
@@ -226,7 +258,7 @@ export function render(root, id) {
     location.hash = '#/guess';
     return;
   }
-  setTitle(game.title.replace(/^Partie modèle : /, ''), '#/guess'); // le titre complet est dans la carte
+  setTitle(shortTitle(game), '#/guess'); // le titre complet est dans la carte
   const plies = pliesOf(game);
   const sig = sigOf(game);
   let alive = true;
@@ -251,8 +283,14 @@ export function render(root, id) {
       const who = playerOf(game, s);
       const n = countFor(game, s);
       return `<button class="guess-side-btn ${s === side ? 'on' : ''}" data-side="${s}">
-        <span class="dot ${s}"></span><span class="guess-side-txt"><b>Les ${colorName(s)}</b>${who ? `<small>${esc(who)}</small>` : ''}<small class="muted">${n} coups${s === game.side ? ' · conseillé' : ''}</small></span></button>`;
+        <span class="dot ${s}"></span><span class="guess-side-txt"><b>Les ${colorName(s)}</b>${who ? `<small>${esc(who)}</small>` : ''}<small class="muted">${n} coups${s === game.side ? ' · conseillé' : ''}</small>${r?.bySide?.[s] != null ? `<small class="guess-side-rec">record&nbsp;: ${r.bySide[s]}&nbsp;%</small>` : ''}</span></button>`;
     };
+    // note affichée quand tu choisis l'autre camp que celui pour lequel la présentation est écrite
+    const other = game.side === 'w' ? 'b' : 'w';
+    const povNote =
+      game.group === 'repertoire'
+        ? `Cette partie modèle est pensée pour les ${colorName(game.side)}&nbsp;: la présentation et les commentaires sont écrits de leur point de vue.`
+        : `Tu as choisi l’autre camp&nbsp;: tu vas deviner les coups ${esc(ofPlayer(playerOf(game, other)))}.`;
     root.innerHTML = `
       <section class="card guess-setup">
         <h2>${esc(game.title)}</h2>
@@ -260,10 +298,10 @@ export function render(root, id) {
         ${md(nb(game.intro))}
         <p><b>Quel camp veux-tu deviner&nbsp;?</b></p>
         <div class="guess-sides">${sideBtn('w')}${sideBtn('b')}</div>
-        <p class="muted small guess-pov" ${side === game.side || game.group !== 'repertoire' ? 'hidden' : ''}>Les commentaires de l’ouverture sont écrits du point de vue des ${colorName(game.side)}.</p>
+        <p class="muted small guess-pov" ${side === game.side ? 'hidden' : ''}>${povNote}</p>
         <p class="muted small guess-tip">💡 ${esc(nb(TIP))}</p>
         ${r?.best != null ? `<p class="small">🏆 Ton record&nbsp;: <b>${r.best}&nbsp;%</b> (${r.attempts} ${plural(r.attempts, 'partie terminée', 'parties terminées')})</p>` : ''}
-        ${prog ? `<button class="btn primary block" data-a="resume">Reprendre au coup ${Math.floor(prog.ply / 2) + 1} avec les ${colorName(prog.side)}</button>` : ''}
+        ${prog ? `<button class="btn primary block" data-a="resume">Reprendre au coup ${nextMoveNo(game, prog.side, prog.ply)} avec les ${colorName(prog.side)}</button>` : ''}
         <button class="btn ${prog ? 'ghost' : 'primary'} block" data-a="start">${prog ? 'Recommencer depuis le début' : 'Commencer'}</button>
       </section>`;
     root.querySelector('.guess-sides').addEventListener('click', (e) => {
@@ -271,7 +309,7 @@ export function render(root, id) {
       if (!b) return;
       side = b.dataset.side;
       root.querySelectorAll('.guess-side-btn').forEach((x) => x.classList.toggle('on', x === b));
-      root.querySelector('.guess-pov').hidden = side === game.side || game.group !== 'repertoire';
+      root.querySelector('.guess-pov').hidden = side === game.side;
     });
     root.querySelector('[data-a=start]').addEventListener('click', () => play({ side, ply: 0, pts: 0, maxPts: 0, results: [] }));
     root.querySelector('[data-a=resume]')?.addEventListener('click', () => play(prog));
@@ -291,7 +329,7 @@ export function render(root, id) {
         <div><small class="muted">Coup</small><b class="guess-count">–</b></div>
         <div><small class="muted">Réussite</small><b class="guess-pct">–</b></div>
       </div>
-      <div class="puzzle-prompt"><span class="dot ${side}"></span><span class="guess-prompt">La partie commence…</span></div>
+      <div class="puzzle-prompt guess-prompt-row"><span class="dot ${side}"></span><span class="guess-prompt">La partie commence…</span></div>
       <div class="board-row"><div class="board-box"></div></div>
       <div class="feedback" aria-live="polite"></div>
       <div class="actions guess-actions" hidden>
@@ -331,7 +369,7 @@ export function render(root, id) {
         if (p.color === 'w') html += `<span class="mnum">${Math.floor(i / 2) + 1}.</span>`;
         else if (i === 0) html += '<span class="mnum">1…</span>';
         const r = res.get(i);
-        html += `<span class="mv ${r ? 'g-' + r.kind : ''}">${fig(p.san)}</span>`;
+        html += `<span class="mv ${r && !r.ne ? 'g-' + r.kind : ''}">${fig(p.san)}</span>`;
       }
       const box = $('.guess-moves');
       box.innerHTML = html || '<span class="muted small">Les coups de la partie s’afficheront ici, avec en couleur ceux que tu as devinés.</span>';
@@ -356,8 +394,9 @@ export function render(root, id) {
       board.setShapes(shapes);
     }
 
-    function saveProgress() {
-      const prog = { sig, side, ply: state.ply, pts: state.pts, maxPts: state.maxPts, results: state.results };
+    /** Enregistre la partie en cours ; ply = prochain demi-coup à jouer (celui qui suit le coup que tu viens de deviner). */
+    function saveProgress(ply = state.ply) {
+      const prog = { sig, side, ply, pts: state.pts, maxPts: state.maxPts, results: state.results };
       saveRecord(game.id, (r) => (r.progress = prog));
     }
 
@@ -464,7 +503,7 @@ export function render(root, id) {
       const i = state.ply;
       const p = plies[i];
       const pts = hintUsed ? Math.max(0, POINTS[kind] - HINT_COST) : POINTS[kind];
-      state.results.push({ i, kind, pts, guess: guessSan });
+      state.results.push({ i, kind, pts, guess: guessSan, ...(noEngine ? { ne: true } : {}) });
       state.pts += pts;
       if (!noEngine) state.maxPts += POINTS.exact; // un coup que Stockfish n'a pas pu juger ne compte pas
       const real = esc(fig(p.san));
@@ -488,8 +527,10 @@ export function render(root, id) {
         skip: [noEngine ? `Stockfish n’a pas pu vérifier ton coup : il ne compte pas. Le coup joué était <b>${real}</b>.` : `Le coup joué était <b>${real}</b>.`, 'ko'],
       }[kind];
       feedback(html, cls);
-      $('.guess-prompt').innerHTML = `${moveNo(i)} Le coup de la partie : <b>${real}</b>`;
+      $('.guess-prompt').innerHTML = nb(`${moveNo(i)} Le coup de la partie : <b>${real}</b>`);
       hud();
+      // enregistré tout de suite : si tu quittes pendant l'animation, ce coup reste compté
+      if (i + 1 < plies.length) saveProgress(i + 1);
 
       // ton coup (rouge si raté, bleu sinon) et le vrai (vert), puis on joue le vrai
       const green = [arrow(p.uci, 'green')];
@@ -505,7 +546,6 @@ export function render(root, id) {
       showCoach();
       state.ply++;
       renderMoves();
-      saveProgress();
       await sleep(900);
       if (live()) advance();
     }
@@ -516,13 +556,20 @@ export function render(root, id) {
       board.setInteractive(null);
       // aucun coup n'a pu être jugé (moteur indisponible) : pas de pourcentage, pas de record
       const pct = state.maxPts ? Math.round((100 * state.pts) / state.maxPts) : null;
-      const prevBest = record(game.id)?.best ?? null;
+      // le record se compare avec les parties jouées du même camp
+      const prevBest = record(game.id)?.bySide?.[side] ?? null;
       saveRecord(game.id, (r) => {
         r.attempts = (r.attempts || 0) + 1;
-        if (pct != null) r.best = Math.max(r.best ?? 0, pct);
+        if (pct != null) {
+          r.best = Math.max(r.best ?? 0, pct); // meilleur des deux camps (affiché dans la liste)
+          r.bySide = { ...r.bySide, [side]: Math.max(r.bySide?.[side] ?? 0, pct) };
+        }
         delete r.progress;
       });
-      const count = (...k) => state.results.filter((r) => k.includes(r.kind)).length;
+      // ne : coup que Stockfish n'a pas pu vérifier (il ne compte ni dans le score ni dans les ratés)
+      const count = (...k) => state.results.filter((r) => k.includes(r.kind) && !r.ne).length;
+      const unchecked = state.results.filter((r) => r.ne).length;
+      const allExact = pct === 100 && state.results.every((r) => r.kind === 'exact');
       const allMissed = state.results.filter((r) => r.kind === 'miss' || r.kind === 'skip');
       const missed = allMissed.slice(0, 10);
       $('.guess-prompt').textContent = nb('Partie terminée !');
@@ -533,8 +580,8 @@ export function render(root, id) {
           : prevBest == null
             ? '🏆 Premier record enregistré !'
             : pct > prevBest
-              ? `🏆 Nouveau record ! (avant : ${prevBest} %)`
-              : `Ton record : ${prevBest} %`;
+              ? `🏆 Nouveau record avec les ${colorName(side)} ! (avant : ${prevBest} %)`
+              : `Ton record avec les ${colorName(side)} : ${prevBest} %`;
       const stat = (cls, n, one, many) => `<div><b class="${cls}">${n}</b><small class="muted">${plural(n, one, many)}</small></div>`;
       const nMiss = count('miss', 'skip');
       const end = document.createElement('section');
@@ -550,11 +597,12 @@ export function render(root, id) {
           ${stat('g-ok', count('ok'), 'jouable', 'jouables')}
           ${stat('g-miss', nMiss, 'raté', 'ratés')}
         </div>
-        ${md(nb(encouragement(pct ?? 0)))}
+        ${unchecked ? `<p class="muted small">${unchecked} ${plural(unchecked, 'coup n’a pas pu être vérifié', 'coups n’ont pas pu être vérifiés')} par Stockfish&nbsp;: ${plural(unchecked, 'il ne compte', 'ils ne comptent')} pas dans le score.</p>` : ''}
+        ${md(nb(encouragement(pct ?? 0, allExact)))}
         ${
           missed.length
             ? `<h2>Les coups à retenir</h2><div class="guess-missed">${missed
-                .map((r) => `<div class="line-item"><b>${moveNo(r.i)}${esc(fig(plies[r.i].san))}</b><span class="muted small">${r.guess ? `tu as joué ${esc(fig(r.guess))}` : 'pas trouvé'}</span></div>`)
+                .map((r) => `<div class="line-item"><b>${moveNo(r.i)}${esc(fig(plies[r.i].san))}</b><span class="muted small">${r.guess ? `tu as joué ${esc(fig(r.guess))}${r.ne ? ' (non vérifié)' : ''}` : 'pas trouvé'}</span></div>`)
                 .join('')}${allMissed.length > missed.length ? `<p class="muted small">… et ${allMissed.length - missed.length} ${plural(allMissed.length - missed.length, 'autre', 'autres')}, en orange dans la liste des coups.</p>` : ''}</div>`
             : ''
         }
@@ -588,7 +636,7 @@ export function render(root, id) {
     board.setPosition(positionAt(state.ply), { interactive: null, lastMove: plies[state.ply - 1]?.uci });
     renderMoves();
     hud();
-    if (state.ply > 0) feedback(`On reprend au coup ${Math.floor(state.ply / 2) + 1}.`);
+    if (state.ply > 0) feedback(`On reprend au coup ${nextMoveNo(game, side, state.ply)}.`);
     advance();
   }
 

@@ -13,7 +13,7 @@ import { Chess } from 'chess.js';
 import { NodeEngine, scoreOf } from './uci.mjs';
 import { OPENING_LINES, OPENING_GROUPS, parseLine } from '../src/data/openings.js';
 import { describeMove, isHanging } from '../src/explain.js';
-import { fig, NAME, VALUE } from '../src/chessutil.js';
+import { fig, NAME, VALUE, theName } from '../src/chessutil.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = join(here, '..', 'src', 'data', 'model-games.js');
@@ -170,6 +170,34 @@ const wing = (sq) => ('abc'.includes(sq[0]) ? 'dame' : 'fgh'.includes(sq[0]) ? '
 const TACTIC_TAGS = ['fourchette', 'clouage', 'enfilade', 'decouverte', 'echec-double'];
 
 /**
+ * « Cloue X sur son roi : il ne peut plus bouger » est faux quand la pièce clouée peut glisser sur la ligne
+ * du clouage (une dame, une tour sur une colonne, un fou sur une diagonale) : on dit alors ce qui est vrai.
+ * (Même règle que dans src/views/guess.js pour les explications de secours.)
+ */
+function pinFix(f, pinner, board) {
+  const m = f.match(/^Cloue (la|le) (\S+) en ([a-h][1-8]) sur son roi : (?:il|elle) ne peut plus bouger\.$/);
+  if (!m) return f;
+  const sq = m[3];
+  const t = board.get(sq)?.type;
+  const straight = sq[0] === pinner[0] || sq[1] === pinner[1];
+  if (!(t === 'q' || (t === 'r' && straight) || (t === 'b' && !straight))) return f;
+  const line = !straight ? 'cette diagonale' : sq[0] === pinner[0] ? 'cette colonne' : 'cette rangée';
+  return `Cloue ${m[1]} ${m[2]} en ${sq} sur son roi : ${m[1] === 'la' ? 'elle' : 'il'} ne peut plus quitter ${line}.`;
+}
+
+/** Cases strictement entre a et b (même colonne, rangée ou diagonale). */
+function between(a, b) {
+  const [fa, ra] = [FILES.indexOf(a[0]), +a[1]];
+  const [fb, rb] = [FILES.indexOf(b[0]), +b[1]];
+  const df = Math.sign(fb - fa);
+  const dr = Math.sign(rb - ra);
+  const out = [];
+  for (let f = fa + df, r = ra + dr; f !== fb || r !== rb; f += df, r += dr) out.push(FILES[f] + r);
+  return out;
+}
+const clear = (c, a, b) => between(a, b).every((s) => !c.get(s));
+
+/**
  * Commentaire d'un coup de la partie générée (ou null).
  * ctx : { before (Chess avant), after (Chess après), m (coup verbeux), prev (coup précédent), hero, loss, bestLine, altLine, isHero, used (Set) }
  */
@@ -199,7 +227,13 @@ function commentFor(ctx) {
   const rearSq = tactic?.startsWith('Enfilade') ? [...tactic.matchAll(/ en ([a-h][1-8])/g)].at(-1)?.[1] : null;
   const rear = rearSq && after.get(rearSq);
   const fakeSkewer = !!rearSq && !(rear && (VALUE[rear.type] > VALUE[m.promotion || m.piece] || !after.attackers(rearSq, rear.color).length));
-  if (tactic && !minor && !loose && !looseCheck && !fakeSkewer && TACTIC_TAGS.some((t) => d.tags.has(t))) parts.push(tactic);
+  // la même phrase ne revient pas deux fois dans une partie (un clouage maintenu, par exemple)
+  const tacticText = tactic && pinFix(tactic, m.to, after).replace(/en partant, la pièce libère/, `en partant, ${theName(m.piece)} libère`);
+  if (tactic && !minor && !loose && !looseCheck && !fakeSkewer && TACTIC_TAGS.some((t) => d.tags.has(t)) && !ctx.used.has('t:' + tacticText)) {
+    ctx.used.add('t:' + tacticText);
+    parts.push(tacticText);
+    ctx.onTactic?.(tacticText);
+  }
 
   // 3. Seul bon coup (pour le camp modèle)
   if (isHero && !recapture && altLine && bestLine.mate === undefined && altLine.mate === undefined && played === bestLine.pv[0]) {
@@ -227,7 +261,7 @@ function planComment({ before, after, m, used }, d) {
 
   if (m.piece === 'p') {
     // Attaque des minorités : les pions a/b avancent contre une majorité adverse sur l'aile dame
-    if (m.to[0] === 'b' && (me === 'w' ? '45' : '54').includes(m.to[1]) && !pawnsOn(after, me, 'c').length && pawnsOn(after, them, 'c').length && countPawns(after, me, 'abc') < countPawns(after, them, 'abc') && countPawns(after, me, 'abc') >= 1) {
+    if (m.to[0] === 'b' && (me === 'w' ? '45' : '54').includes(m.to[1]) && !d.tags.has('menace') && !d.tags.has('fourchette') && !pawnsOn(after, me, 'c').length && pawnsOn(after, them, 'c').length && countPawns(after, me, 'abc') < countPawns(after, them, 'abc') && countPawns(after, me, 'abc') >= 1) {
       const t = once('minorite', `Attaque des minorités : les pions de l’aile dame avancent contre la majorité adverse (pion ${pawnsOn(after, them, 'c')[0]}) pour lui créer un pion faible.`);
       if (t) return t;
     }
@@ -237,7 +271,8 @@ function planComment({ before, after, m, used }, d) {
       const t = once('e4', `La poussée e4 : les Blancs prennent plus de place au centre${freesBishop ? ' et libèrent la diagonale du fou c1' : ''}.`);
       if (t) return t;
     }
-    if (me === 'b' && m.to === 'e5' && m.from[0] === 'e' && !m.captured && moveNo >= 8) {
+    const whitePawn = (sq) => after.get(sq)?.type === 'p' && after.get(sq)?.color === 'w';
+    if (me === 'b' && m.to === 'e5' && m.from[0] === 'e' && !m.captured && moveNo >= 8 && (whitePawn('d4') || whitePawn('f4'))) {
       const freesBishop = after.get('c8')?.type === 'b' && after.get('c8')?.color === 'b' && !after.get('d7') && m.from === 'e6';
       const t = once('e5', `La poussée …e5 : les Noirs contestent le centre${freesBishop ? ' et libèrent leur fou c8, enfermé jusqu’ici' : ''}.`);
       if (t) return t;
@@ -276,7 +311,13 @@ function planComment({ before, after, m, used }, d) {
 
   // Échange des dames
   if (queensOn(before) > 0 && queensOn(after) === 0) {
-    const t = once('finale', 'Les dames ont disparu : dans cette finale, le roi devient une pièce active. Il faut le rapprocher du centre.');
+    const pieces = after.board().flat().filter((p) => p && p.type !== 'p' && p.type !== 'k').length;
+    const t = once(
+      'finale',
+      pieces <= 4
+        ? 'Les dames ont disparu : dans cette finale, le roi devient une pièce active. Il faut le rapprocher du centre.'
+        : 'Les dames ont disparu : les rois sont moins en danger. Quand d’autres pièces seront échangées, le roi deviendra une pièce active, à rapprocher du centre.',
+    );
     if (t) return t;
   }
 
@@ -291,16 +332,23 @@ function planComment({ before, after, m, used }, d) {
     const file = m.to[0];
     const own = pawnsOn(after, me, file).length;
     const theirs = pawnsOn(after, them, file);
-    const doubled = FILES.includes(file) && [1, 2, 3, 4, 5, 6, 7, 8].some((r) => {
+    const doubled = [1, 2, 3, 4, 5, 6, 7, 8].some((r) => {
       const p = after.get(file + r);
-      return p?.type === 'r' && p.color === me && file + r !== m.to;
+      return p?.type === 'r' && p.color === me && file + r !== m.to && clear(after, m.to, file + r);
     });
     if (!own && doubled) {
       const t = once('doublees', `Tours doublées sur la colonne ${file} : leur force s’additionne.`);
       if (t) return t;
     }
     if (!own && theirs.length) {
-      const t = once('colonne', `La tour s’installe sur la colonne ${file} semi-ouverte : elle vise le pion ${theirs[0]}.`);
+      // le pion adverse le plus proche de la tour
+      const target = me === 'w' ? theirs[0] : theirs.at(-1);
+      const t = once(
+        'colonne',
+        clear(after, m.to, target)
+          ? `La tour s’installe sur la colonne ${file} semi-ouverte : elle vise le pion ${target}.`
+          : `La tour s’installe sur la colonne ${file} semi-ouverte, en face du pion ${target}.`,
+      );
       if (t) return t;
     }
     if (!own && !theirs.length) {
@@ -346,6 +394,7 @@ async function buildGame(engine, p, seed, fixed = null) {
   const extra = 25 + Math.floor(rand() * 11); // 25 à 35 coups de plus
   const target = bookLen + 2 * extra;
   const used = new Set();
+  const tactics = {}; // demi-coup → phrase de tactique ajoutée au commentaire
   let lines = await engine.analyse(c.fen(), { depth: DEPTH, multipv: 2 });
   let reason = 'longueur';
 
@@ -399,12 +448,22 @@ async function buildGame(engine, p, seed, fixed = null) {
     const next = c.isGameOver() ? [] : await engine.analyse(c.fen(), { depth: DEPTH, multipv: 2 });
     const afterScore = c.isCheckmate() ? 10000 : c.isDraw() ? 0 : -scoreOf(next[0]);
     const loss = best.mate === undefined && Math.abs(afterScore) < 9000 ? bestScore - afterScore : 0;
-    const text = commentFor({ before, after: c, m, prev: verbose.at(-2), hero, loss, bestLine: best, altLine: alt, isHero: mover === hero, used });
-    if (text) comments[moves.length - 1] = text;
+    const k = moves.length - 1;
+    const text = commentFor({ before, after: c, m, prev: verbose.at(-2), hero, loss, bestLine: best, altLine: alt, isHero: mover === hero, used, onTactic: (t) => (tactics[k] = t) });
+    if (text) comments[k] = text;
     lines = next;
   }
   if (c.isCheckmate()) reason = 'mat';
   else if (c.isDraw()) reason = 'nulle';
+
+  // une fourchette (ou un clouage…) dont la pièce est prise dès le coup suivant ne mérite pas d'être annoncée
+  for (const [k, t] of Object.entries(tactics)) {
+    const nxt = verbose[+k + 1];
+    if (!nxt?.captured || nxt.to !== verbose[k].to) continue;
+    const rest = comments[k].replace(t, '').trim();
+    if (rest) comments[k] = rest;
+    else delete comments[k];
+  }
 
   // commentaire final : où en est la partie
   const last = moves.length - 1;

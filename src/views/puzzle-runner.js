@@ -14,11 +14,14 @@ import { showCoach } from './coach-panel.js';
  *        allowOthers (accepte tout coup aussi bon selon Stockfish), onResult(ok, firstTry), nextLabel, onNext
  * Options facultatives (modes chronométrés : course, Woodpecker) :
  *        compact (cache Indice / Solution / Pourquoi / Suivant),
- *        strict (seulement la solution exacte ou un mat, sans vérification moteur),
+ *        strict (la solution exacte ou un mat, sans vérification moteur ; seule exception, dans une combinaison à plusieurs
+ *        coups, un autre coup aussi gagnant est accepté après vérification par Stockfish, au plus 6 s),
  *        onSolved() appelé dès la résolution (pour enchaîner),
  *        onFail({ played, expected, shown }) appelé au premier mauvais coup : l'exercice s'arrête et montre
  *        la solution 0,8 s ; `shown` est une promesse résolue à la fin de cet affichage.
  */
+const STRICT_CHECK_MS = 6000;
+
 export function runPuzzle(el, opts) {
   const { fen, solution, prompt = '', hint = '', success = '', compact = false, strict = false } = opts;
   const allowOthers = !!opts.allowOthers && !strict;
@@ -75,18 +78,27 @@ export function runPuzzle(el, opts) {
       return;
     }
     // coup différent de la solution : est-il aussi bon ?
-    if (allowOthers) {
+    // En mode strict, on ne vérifie que les combinaisons (plusieurs coups à trouver) : le coup unique d'un exercice
+    // court est vérifié dans la banque, mais une combinaison a parfois deux chemins (deux façons de mater, de reprendre…).
+    if (allowOthers || (strict && solution.length > 1)) {
       board.setPosition(chess, { interactive: null });
       feedback('<span class="muted">Vérification avec Stockfish…</span>');
       const engine = getAnalysisEngine();
-      const ref = await engine.search(before, { depth: 12 });
-      const mine = await engine.search(chess.fen(), { depth: 12 });
+      const both = (async () => {
+        const ref = await engine.search(before, { depth: 12 });
+        const mine = await engine.search(chess.fen(), { depth: 12 });
+        return { ref, mine };
+      })();
+      // en mode chronométré, on n'attend pas indéfiniment un moteur qui ne répond pas
+      const res = strict ? await Promise.race([both, sleep(STRICT_CHECK_MS).then(() => null)]) : await both;
       if (!alive) return;
-      const sign = me === 'w' ? 1 : -1;
-      const refScore = cpWhite(ref.lines[0]) * sign;
-      const myScore = chess.isGameOver() ? 0 : cpWhite(mine.lines[0]) * sign;
-      if (myScore >= refScore - 60 || (refScore > 600 && myScore > 600)) {
-        return solved('Aussi bon que la solution prévue !');
+      if (res) {
+        const sign = me === 'w' ? 1 : -1;
+        const refScore = cpWhite(res.ref.lines[0]) * sign;
+        const myScore = chess.isGameOver() ? 0 : cpWhite(res.mine.lines[0]) * sign;
+        if (myScore >= refScore - 60 || (refScore > 600 && myScore > 600)) {
+          return solved('Aussi bon que la solution prévue !');
+        }
       }
     }
     firstTry = false;

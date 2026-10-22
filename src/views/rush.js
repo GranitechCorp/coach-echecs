@@ -31,6 +31,16 @@ const MOTIFS = ['mateIn1', 'mateIn2', 'mate', 'discoveredAttack', 'skewer', 'pin
 /** Difficulté estimée : la note de l'exercice, + un peu pour chaque coup à trouver en plus. */
 export const difficulty = (p) => p.rating + 70 * (Math.ceil(p.solution.length / 2) - 1);
 
+const forcedMemo = new Map();
+/**
+ * Exercice dont le premier coup est le seul coup légal (quelques positions de la banque commencent en échec) :
+ * il n'y a rien à trouver, on l'écarte de la course et des lots Woodpecker. Calculé à la demande (≈ 1 ms).
+ */
+export function isForced(p) {
+  if (!forcedMemo.has(p.id)) forcedMemo.set(p.id, new Chess(p.fen).moves().length < 2);
+  return forcedMemo.get(p.id);
+}
+
 /** Motif principal (pour varier les thèmes). */
 export const mainTheme = (p) => MOTIFS.find((t) => p.themes.includes(t)) || p.themes[0] || 'mix';
 
@@ -223,21 +233,24 @@ export function rushStats() {
 
 /** Prochain exercice : proche de la difficulté visée, jamais déjà vu dans la course, thème différent du précédent si possible. */
 function pickNext(run) {
-  let best = null;
-  let bestKey = Infinity;
-  for (const p of BANK) {
-    if (run.used.has(p.id)) continue;
-    const key =
-      Math.abs(difficulty(p) - run.target) +
-      (run.recent.has(p.id) ? 120 : 0) + // déjà vu dans une course récente
-      (mainTheme(p) === run.prevTheme ? 60 : 0) + // thèmes mélangés
-      Math.random() * 45; // un peu de hasard
-    if (key < bestKey) {
-      bestKey = key;
-      best = p;
+  for (;;) {
+    let best = null;
+    let bestKey = Infinity;
+    for (const p of BANK) {
+      if (run.used.has(p.id) || forcedMemo.get(p.id)) continue;
+      const key =
+        Math.abs(difficulty(p) - run.target) +
+        (run.recent.has(p.id) ? 120 : 0) + // déjà vu dans une course récente
+        (mainTheme(p) === run.prevTheme ? 60 : 0) + // thèmes mélangés
+        Math.random() * 45; // un peu de hasard
+      if (key < bestKey) {
+        bestKey = key;
+        best = p;
+      }
     }
+    // coup forcé : rien à chercher, on prend le suivant (isForced le mémorise, il sera ignoré ensuite)
+    if (!best || !isForced(best)) return best;
   }
-  return best;
 }
 
 // ─── Écran ───
@@ -472,8 +485,11 @@ export function render(root) {
     let recordHtml;
     if (E.record) recordHtml = `<div class="rush-record">🏆 Nouveau record !${E.prevBest ? ` <span class="muted small">(ancien : ${E.prevBest})</span>` : ''}</div>`;
     else if (!E.prevBest) recordHtml = '<div class="muted small">Résous au moins un exercice pour établir ton premier record.</div>';
-    else
-      recordHtml = `<div class="muted small">Ton record en ${esc(M.label.toLowerCase())} : <b>${E.prevBest}</b> · encore ${E.prevBest - E.score + 1} pour le battre</div>`;
+    else if (E.score === E.prevBest) recordHtml = `<div class="muted small">Tu égales ton record (<b>${E.prevBest}</b>) : encore un exercice de plus pour le battre !</div>`;
+    else {
+      const gap = E.prevBest - E.score + 1;
+      recordHtml = `<div class="muted small">Ton record ${M.seconds ? `en ${esc(M.label)}` : 'en survie'} : <b>${E.prevBest}</b> · encore ${gap} exercice${gap > 1 ? 's' : ''} pour le battre</div>`;
+    }
     root.innerHTML = `
       <section class="card center rush-end">
         <div class="muted">${esc(reasonTxt)}</div>
@@ -482,7 +498,7 @@ export function render(root) {
         ${recordHtml}
       </section>
       <section class="card">
-        <div class="rush-stats">
+        <div class="rush-stats rush-end-stats">
           <div><b>${E.score}</b><small class="muted">réussi${E.score > 1 ? 's' : ''}</small></div>
           <div><b>${E.errors}</b><small class="muted">erreur${E.errors > 1 ? 's' : ''}</small></div>
           <div><b>${top || '–'}</b><small class="muted">plus haut niveau réussi</small></div>

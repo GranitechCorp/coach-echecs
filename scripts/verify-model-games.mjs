@@ -1,7 +1,8 @@
 // Vérifie les parties modèles de « Devine le coup » (src/data/model-games.js) :
 //  - champs présents, identifiants uniques, groupe et camp valides ;
 //  - chaque coup est légal (chess.js) et écrit comme chess.js l'écrit ;
-//  - chaque commentaire pointe vers un demi-coup qui existe, et ne contient ni HTML ni « undefined ».
+//  - chaque commentaire pointe vers un demi-coup qui existe, et ne contient ni HTML ni « undefined » ;
+//  - textes affichés (titre, intro, commentaires) : apostrophes typographiques, coups en figurines (♞f3), pas de « Cf3 ».
 // Usage : node scripts/verify-model-games.mjs [--print]   (--print affiche chaque commentaire à côté de son coup)
 import { Chess } from 'chess.js';
 import { MODEL_GAMES } from '../src/data/model-games.js';
@@ -45,11 +46,21 @@ for (const g of MODEL_GAMES) {
   const guesses = played.filter((_, i) => (i % 2 === 0 ? 'w' : 'b') === g.side).length;
   if (guesses < 5) fail(`${label} : seulement ${guesses} coups à deviner`);
 
+  /** Défauts d'un texte affiché : HTML, valeur technique, apostrophe droite, notation française (Cf3) au lieu des figurines. */
+  const textIssue = (t) =>
+    /[<>]|undefined|NaN|\bnull\b/.test(t) ? 'HTML ou valeur technique'
+    : t.includes("'") ? 'apostrophe droite (’ attendue)'
+    : /(^|[^\p{L}])[RDTFC][a-h]?[1-8]?x?[a-h][1-8]/u.test(t) ? 'notation française (♞f3 attendu)'
+    : null;
+  for (const k of ['title', 'intro', 'event', 'opening']) {
+    const issue = typeof g[k] === 'string' && textIssue(g[k]);
+    if (issue) fail(`${label} : champ « ${k} » : ${issue}`);
+  }
   for (const [k, text] of Object.entries(g.comments || {})) {
     const i = Number(k);
     if (!Number.isInteger(i) || i < 0 || i >= sans.length) fail(`${label} : commentaire sur un demi-coup inexistant (${k}, la partie en a ${sans.length})`);
     if (typeof text !== 'string' || !text.trim()) fail(`${label} : commentaire vide (${k})`);
-    else if (/[<>]|undefined|NaN|\bnull\b/.test(text)) fail(`${label} : commentaire suspect (${k}) : ${text}`);
+    else if (textIssue(text)) fail(`${label} : commentaire ${k} : ${textIssue(text)} : ${text}`);
   }
 
   const end = c.isCheckmate() ? 'mat' : c.isDraw() ? 'nulle' : 'en cours';

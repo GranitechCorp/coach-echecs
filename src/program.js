@@ -66,7 +66,7 @@ export function buildProgram(ins) {
   };
   const visionItem = { type: 'vision', label: 'Vision : le défi du jour (5 min)', why: 'Te repérer sur l’échiquier sans regarder les lettres' };
   const mistakes = s.mistakes.length || ins.analysed ? { type: 'mistakes', label: 'Revoir « Mes erreurs » du jour' } : null;
-  const woodItem = { type: 'woodpecker', label: wood.active ? `Woodpecker : continue ton cycle ${wood.cycle} (20 min)` : 'Woodpecker : commence ton lot d’exercices (20 min)', why: 'Transformer les motifs tactiques en réflexes' };
+  const woodItem = { type: 'woodpecker', label: !wood.active ? 'Woodpecker : commence ton lot d’exercices (20 min)' : wood.cycleFinished ? `Woodpecker : commence le cycle ${wood.cycle + 1} (20 min)` : `Woodpecker : continue ton cycle ${wood.cycle} (20 min)`, why: 'Transformer les motifs tactiques en réflexes' };
   const rushItem = { type: 'rush', count: 2, label: '2 courses contre la montre', why: 'Le coup d’œil tactique' };
   const playItem = { type: 'play', elo: level, label: `1 partie contre l’ordinateur ${level}` };
   const selfItem = { type: 'selfreview', label: 'Auto-analyse de ta dernière partie, puis son bilan Stockfish', why: 'Apprendre à trouver tes erreurs tout seul' };
@@ -102,7 +102,7 @@ export function isDone(item) {
   const t = today();
   switch (item.type) {
     case 'puzzles': {
-      const h = s.puzzles.history.filter((x) => x.date?.startsWith(t) && x.kind === 'lichess' && (item.theme === 'mix' || x.theme === item.theme));
+      const h = s.puzzles.history.filter((x) => x.date?.startsWith(t) && ['lichess', 'rush', 'woodpecker'].includes(x.kind) && (item.theme === 'mix' || x.theme === item.theme));
       return h.length >= item.count;
     }
     case 'mistakes':

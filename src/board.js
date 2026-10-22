@@ -61,6 +61,11 @@ export function createBoard(el, { orientation = 'white', onMove, coordinates = t
   }
 
   const stopNames = squareNames ? attachSquareNames(el, cg) : null;
+  // Chessground garde en cache la position du plateau à l'écran : si le texte au-dessus change de hauteur (question
+  // sur deux lignes, message d'erreur), elle devient fausse et le doigt tomberait sur la mauvaise case.
+  // On la fait relire juste avant chaque toucher.
+  const refreshBounds = () => cg.state.dom.bounds.clear();
+  for (const ev of ['touchstart', 'mousedown']) el.addEventListener(ev, refreshBounds, { capture: true, passive: true });
 
   /** Synchronise l'affichage avec la partie. */
   function sync(lastMoveUci) {

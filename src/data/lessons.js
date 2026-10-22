@@ -37,7 +37,7 @@ export const LESSONS = [
 - **c4** = colonne c, rangée 4. La lettre d'abord, toujours.
 
 Les repères qui rendent ça automatique :
-- **Les pièces de départ donnent leur nom aux colonnes** : a et h = tours, b et g = cavaliers, c et f = fous, d = dame, e = roi. « c4 », c'est *la colonne du fou c1, quatre cases plus haut* ; « h7 », c'est *le pion juste devant la tour h8*.
+- **Les pièces de départ donnent leur nom aux colonnes** : a et h = tours, b et g = cavaliers, c et f = fous, d = dame, e = roi. « c4 », c'est *la colonne du fou c1, sur la 4e rangée* ; « h7 », c'est *le pion juste devant la tour h8*.
 - **Rangées 1-2** = camp blanc, **7-8** = camp noir, **4 et 5** = la ligne de front au milieu.
 - **Le centre** : d4, e4, d5, e5.
 - **f2 et f7** : les points faibles du début de partie, défendus seulement par le roi.
@@ -679,7 +679,7 @@ Ici, les Blancs ont un pion passé éloigné en a4 : le roi noir devra aller le 
         question: 'Les Blancs ont un pion passé en d4, et tu as les Noirs. Où places-tu ton cavalier ?',
         choices: ['En d5, juste devant le pion', 'En b3, pour l’attaquer de loin', 'Le plus loin possible, pour attaquer ailleurs'],
         answer: 0,
-        explain: 'Bloque le pion passé juste devant lui : il ne peut plus avancer, et ton cavalier y est solide (aucun pion ne peut l’en chasser). Nimzowitsch : un pion passé est un criminel qu’il faut mettre sous les verrous.',
+        explain: 'Bloque le pion passé juste devant lui : il ne peut plus avancer, et ton cavalier y est solide, abrité des attaques de face par le pion lui-même. Nimzowitsch : un pion passé est un criminel qu’il faut mettre sous les verrous.',
       },
       {
         type: 'play',
@@ -687,6 +687,7 @@ Ici, les Blancs ont un pion passé éloigné en a4 : le roi noir devra aller le 
         fen: '8/6pp/3k4/8/P2K4/8/6PP/8 w - - 0 1',
         goal: 'promote',
         maxMoves: 20,
+        failBelow: 150,
       },
     ],
   },
@@ -940,7 +941,7 @@ Ici, ta Caro-Kann (variante classique) : les Blancs ont roqué côté dame, toi 
         text: `Être gagnant et **gagner**, ce n'est pas la même chose ! Beaucoup de parties « gagnées » finissent en nulle (pat, échec perpétuel) ou même en défaite. La méthode des champions (Capablanca) :
 1. **Supprime le contre-jeu d'abord** : à chaque coup, demande-toi « que veut-il ? » (une menace de mat, un pion passé, un échec perpétuel).
 2. **Échange les pièces, pas les pions** : avec une pièce de plus, chaque échange rend ton avantage plus grand. Garde tes pions : ce sont eux qui feront une nouvelle dame.
-3. **Mets ton roi à l'abri** (une case de fuite comme h3), puis **active-le** en finale : c'est une pièce forte.
+3. **Mets ton roi à l'abri** (donne-lui une case de fuite, avec h3 par exemple), puis **active-le** en finale : c'est une pièce forte.
 4. **Pas de précipitation** : un coup sûr vaut mieux qu'un coup brillant. Vérifie toujours ses échecs, ses prises et ses menaces.
 5. **Méfie-toi du pat** : quand il n'a plus que son roi, laisse-lui toujours une case.`,
       },
@@ -951,7 +952,7 @@ Ici, ta Caro-Kann (variante classique) : les Blancs ont roqué côté dame, toi 
         solution: ['g2g3'],
         allowOthers: true,
         hint: 'Regarde la case h2 : la dame noire et le fou d6 la visent.',
-        success: 'g3 ! La menace …Dxh2 mat est parée, et ta pièce de plus finira par parler. Quand tu es gagnant, ta première mission est de ne rien laisser à l’adversaire.',
+        success: 'g3 ! Le pion coupe la diagonale du fou d6 et chasse la dame noire. Sans ce coup, …Fxh2+ ! Rh1 Fg3+ Rg1 Dh2 mat. Ta pièce de plus finira par parler : quand tu es gagnant, ta première mission est de ne rien laisser à l’adversaire.',
       },
       {
         type: 'puzzle',
@@ -981,7 +982,7 @@ Ici, ta Caro-Kann (variante classique) : les Blancs ont roqué côté dame, toi 
   {
     id: 'calcul',
     module: 'strategie',
-    title: 'Calculer : coups candidats et vérification',
+    title: 'Calcul : coups candidats et vérification',
     minutes: 14,
     steps: [
       {
@@ -1001,7 +1002,7 @@ Et le conseil de Lasker : *« Quand tu vois un bon coup, cherches-en un meilleur
         fen: 'r3r1k1/pp3ppp/1q1N4/5b2/4n3/3nQP2/PP1BB1PP/2R2KNR b - - 2 18',
         solution: ['e4d2', 'e3d2', 'b6f2'],
         hint: 'Un cavalier peut donner échec en prenant quelque chose…',
-        success: '…Cxd2+ ! Dxd2 (forcé) Df2 mat. Le premier échec a **attiré** la dame blanche en d2 : elle ne gardait plus la case f2.',
+        success: '…Cxd2+ ! Dxd2 (forcé) Df2 mat. Le premier échec a **dévié** la dame blanche : en quittant e3, elle a ouvert la diagonale b6-f2 et ne gardait plus la case f2.',
       },
       {
         type: 'puzzle',
