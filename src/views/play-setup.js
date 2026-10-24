@@ -27,7 +27,7 @@ export function render(root, presetElo) {
           return `<button class="chip ${l.elo === pref.elo ? 'on' : ''}" data-elo="${l.elo}"><b>${l.elo}</b><small>${esc(l.label)}</small>${r ? `<small class="rec">${r.w}V ${r.d}N ${r.l}D</small>` : ''}</button>`;
         }).join('')}
       </div>
-      <p class="muted small">Conseil : joue contre un niveau 100 à 200 points au-dessus du tien. Quand tu gagnes 2 parties sur 3, monte d’un cran.</p>
+      <p class="muted small">Jusqu’à 1800, l’ordinateur se trompe comme un joueur humain de ce niveau (mêmes erreurs moyennes, autant de gaffes), au lieu de jouer parfaitement puis de donner une pièce au hasard. Conseil : joue contre un niveau 100 à 200 points au-dessus du tien. Quand tu gagnes 2 parties sur 3, monte d’un cran.</p>
     </section>
     <section class="card">
       <h2>Couleur</h2>
