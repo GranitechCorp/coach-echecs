@@ -1,1 +1,104 @@
-/* Anti-gaffe (#/gaffe) */
+/* Anti-gaffe (#/gaffe) : « Sûr ou gaffe ? » et « Punis la gaffe » */
+
+/* ─── Menu ─── */
+.bl-method h2 { margin-bottom: 4px; }
+.bl-method p { margin: 4px 0; }
+.bl-questions { margin: 6px 0 8px; padding-left: 22px; }
+.bl-questions li { margin: 4px 0; }
+.bl-questions b { color: var(--accent); }
+.bl-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  background: var(--card); border-radius: var(--radius); padding: 8px 6px; margin: 10px 0;
+}
+.bl-stats > div { display: flex; flex-direction: column; align-items: center; min-width: 0; text-align: center; }
+.bl-stats b { font-size: 1.25rem; line-height: 1.2; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bl-stats small { font-size: 0.72rem; line-height: 1.2; color: var(--muted); }
+.bl-stats .bl-due { color: var(--c-mistake); }
+.bl-due-note { margin: -4px 2px 6px; }
+.bl-mode { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); }
+.bl-mode:active { transform: scale(0.98); }
+.bl-mode-icon { font-size: 1.7rem; width: 2.2rem; text-align: center; flex: none; }
+.bl-mode-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bl-mode-txt b { font-size: 1.05rem; }
+.bl-mode-txt small { line-height: 1.35; color: var(--muted); }
+.bl-mode-txt .bl-mode-src { color: var(--accent); }
+.bl-mode .pill { flex: none; align-self: flex-start; }
+.bl-foot { margin: 4px 2px; }
+
+/* ─── Bandeau de séance : position, progression, score ─── */
+.bl-hud {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border-radius: var(--radius); padding: 6px 12px; margin: 2px 0 6px;
+}
+.bl-count { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 3.6em; }
+.bl-dots { flex: 1; display: flex; gap: 4px; justify-content: center; min-width: 0; }
+.bl-dots span { width: 10px; height: 10px; border-radius: 50%; background: var(--card2); border: 1px solid var(--line); flex: none; }
+.bl-dots .ok { background: var(--accent); border-color: var(--accent); }
+.bl-dots .ko { background: var(--c-mistake); border-color: var(--c-mistake); }
+.bl-dots .cur { border-color: var(--text); }
+.bl-score { font-weight: 700; color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ─── Une position ─── */
+.bl-src { margin: 0 0 4px; line-height: 1.3; overflow-wrap: anywhere; }
+.bl-rev { color: var(--c-inaccuracy); font-size: 0.75rem; padding: 0 6px; }
+/* la question garde la même hauteur (une ou deux lignes) : l'échiquier ne saute pas */
+.bl-prompt { min-height: 2.9em; align-items: center; }
+.bl-q { min-width: 0; overflow-wrap: anywhere; }
+.bl-answer { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 2px 0 8px; }
+.bl-answer .btn { min-height: 50px; font-size: 1.05rem; }
+.btn.bl-safe { background: #2f3a26; border-color: var(--accent2); color: #d8f0c0; }
+.btn.bl-gaffe { background: #432522; border-color: var(--danger); color: #ffd5cf; }
+.bl-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 14px; font-size: 0.8rem; color: var(--muted); margin: -2px 0 0; }
+.bl-legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+/* mêmes couleurs que les flèches de l'échiquier */
+.bl-key { display: inline-block; width: 16px; height: 5px; border-radius: 3px; }
+.bl-key.red { background: #a52a2a; }
+.bl-key.orange { background: #e68f00; }
+.bl-key.green { background: #1f9a26; }
+.bl-key.blue { background: #2f62c8; }
+.bl-key.ring { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #1f9a26; background: none; }
+/* promotion : l'échiquier est posé dans un .cg-wrap (blunder.js) pour que les pièces de la fenêtre de choix aient
+   leur dessin ; on annule la taille d'une case que chessground leur donne */
+.bl-stage .promo piece { width: auto; height: auto; }
+.bl-coach p { margin: 4px 0; }
+.bl-coach ul { margin: 2px 0 4px; }
+.bl-wait { text-align: center; }
+/* Réponse donnée : le verdict remplace la question et l'échiquier rétrécit (flèches toujours lisibles), pour que
+   « Position suivante » et le début de l'explication tiennent dessous sur un téléphone de 780 px, sans défiler. */
+.bl-prompt.ok .bl-q { color: var(--accent); }
+.bl-prompt.ko .bl-q { color: var(--c-mistake); }
+.bl-done .board-row { max-width: min(60%, 72vh); margin-bottom: 4px; }
+.bl-done .bl-next { margin: 6px 0 0; }
+.bl-done .bl-coach { margin: 8px 0 4px; padding: 8px 12px; font-size: 0.93rem; line-height: 1.4; }
+.bl-done .bl-coach .coach-title { margin-bottom: 2px; }
+
+/* ─── Punis la gaffe : rappel « Échecs ? Prises ? Menaces ? » ─── */
+/* trois colonnes de largeur fixe : cocher une question ne fait jamais sauter l'échiquier */
+.bl-cct-label { margin: 0 0 4px; }
+.bl-cct { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 0 6px; }
+.bl-chip {
+  background: var(--card2); color: var(--text); border: 1px solid var(--line); border-radius: 16px;
+  padding: 6px 4px; min-height: 36px; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.bl-chip::before { content: '○ '; color: var(--muted); }
+.bl-chip.on { border-color: var(--accent); color: var(--accent); }
+.bl-chip.on::before { content: '✓ '; color: var(--accent); }
+.bl-chip.answer { background: #4a3a14; border-color: var(--c-inaccuracy); color: var(--c-inaccuracy); }
+
+/* ─── Bilan ─── */
+.bl-end { text-align: center; padding-block: 14px; }
+.bl-final { font-size: 2.6rem; font-weight: 800; line-height: 1.1; color: var(--accent); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.bl-final small { font-size: 1rem; color: var(--muted); font-weight: 600; }
+.bl-cheer { font-weight: 600; margin: 6px 0 10px; }
+.bl-end-stats { display: flex; justify-content: center; gap: 8px; margin: 6px 0 4px; }
+.bl-end-stats > div { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.bl-end-stats b { font-size: 1.2rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bl-end-stats small { font-size: 0.75rem; line-height: 1.2; }
+.bl-end h2 { margin: 14px 0 4px; text-align: left; }
+.bl-end > p.muted { text-align: left; }
+.bl-take { text-align: left; border-top: 1px solid var(--line); padding: 8px 0; }
+.bl-take p { margin: 2px 0 0; font-size: 0.92rem; }
+.bl-missed { text-align: left; }
+.bl-missed .line-item > span { min-width: 0; overflow-wrap: anywhere; }
+.bl-why { color: var(--c-mistake); flex: none; text-align: right; max-width: 42%; line-height: 1.25; }
+.bl-end-actions { margin-top: 12px; }
