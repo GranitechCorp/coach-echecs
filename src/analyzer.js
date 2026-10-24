@@ -1,7 +1,7 @@
 // Analyse d'une partie avec Stockfish + extraction des données qui servent au suivi personnalisé
 // (phases, pendule, catégories d'erreurs, occasions, conversion…).
 import { Chess } from 'chess.js';
-import { update, uid } from './storage.js';
+import { update, uid, dayOf, today } from './storage.js';
 import { getAnalysisEngine } from './engine.js';
 import { parsePgn, uciOf, cpWhite, winPct, safeChess, playUci, VALUE } from './chessutil.js';
 import { classifyMove, describeMove, isHanging } from './explain.js';
@@ -12,6 +12,14 @@ export const REVIEW_VERSION = 3;
 // version des règles d'étiquetage (!!, !, ✗) : les étiquettes se recalculent sans moteur quand elle change
 // (2 : la pièce sacrifiée doit être en prise juste après le coup ; pas de « brillant » au-delà de ≈ +6)
 export const TAGS_VERSION = 2;
+// version des règles de l'Elo estimé (2 : pas d'Elo sous MIN_ELO_MOVES coups joués) : recalcul sans moteur
+export const ELO_VERSION = 2;
+// version des données dérivées (2 : parties trop courtes sans Elo, temps passé par coup, catégorie « trop-vite » ;
+// 3 : seuil « trop vite » plafonné à 5 s, pendules incomplètes ignorées) :
+// elles se recalculent sans moteur quand elle change
+export const DERIVED_VERSION = 3;
+/** En dessous de ce nombre de coups joués, une partie est trop courte pour estimer un niveau. */
+export const MIN_ELO_MOVES = 15;
 
 /** Trouve la ligne de répertoire qui colle le plus longtemps à la partie. */
 export function matchOpening(sans) {
@@ -251,7 +259,8 @@ export const eloFromAcpl = (acpl) => Math.round(Math.max(300, Math.min(2800, Mat
 /**
  * Elo estimé de la partie pour chaque camp, à partir de la perte moyenne par coup (ACPL) :
  * chaque perte est plafonnée à 400 cp, les mats (et les évaluations énormes) ramenés à ±1000 cp.
- * Renvoie { w, b, acpl: {w, b} } (null si le camp a joué moins de 5 coups). Toujours indicatif.
+ * Renvoie { w, b, acpl: {w, b} } : l'Elo vaut null si le camp a joué moins de MIN_ELO_MOVES coups
+ * (quelques coups de théorie suffiraient à afficher 2800), l'ACPL dès 5 coups. Toujours indicatif.
  */
 export function computeGameElo(moves, evals) {
   const clamp = (v) => Math.max(-1000, Math.min(1000, v));
@@ -264,7 +273,8 @@ export function computeGameElo(moves, evals) {
   });
   const acpl = (a) => (a.length >= 5 ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
   const a = { w: acpl(losses.w), b: acpl(losses.b) };
-  return { w: a.w === null ? null : eloFromAcpl(a.w), b: a.b === null ? null : eloFromAcpl(a.b), acpl: a };
+  const elo = (c) => (a[c] === null || losses[c].length < MIN_ELO_MOVES ? null : eloFromAcpl(a[c]));
+  return { w: elo('w'), b: elo('b'), acpl: a };
 }
 
 /** Ajoute étiquettes et Elo estimé à un bilan qui n'en a pas encore (anciens bilans). Renvoie vrai si modifié. */
@@ -276,9 +286,10 @@ export function ensureReviewExtras(review, fens, moves) {
     review.tagsV = TAGS_VERSION;
     changed = true;
   }
-  if (!review.elo) {
+  if (!review.elo || review.eloV !== ELO_VERSION) {
     const est = computeGameElo(moves, review.evals);
     review.elo = { w: est.w, b: est.b };
+    review.eloV = ELO_VERSION;
     review.acpl = est.acpl;
     changed = true;
   }
@@ -366,6 +377,7 @@ export async function analyzeGame(game, { depth = 12, onProgress, isAlive = () =
     tags: computeTags(fens, moves, evals, classes),
     tagsV: TAGS_VERSION,
     elo: { w: est.w, b: est.b },
+    eloV: ELO_VERSION,
     acpl: est.acpl,
     opening: openingName(headers, match),
     bookLen: match.len,
@@ -406,6 +418,32 @@ function clocksOf(pgn, n) {
   return out.length >= n * 0.9 ? out.slice(0, n) : null;
 }
 
+/** Cadence « 600+5 » → { base: 600, inc: 5 } en secondes ; null pour une partie par correspondance ou sans cadence. */
+export function timeControlOf(game, headers) {
+  const m = /^(\d+)(?:\+(\d+(?:\.\d+)?))?$/.exec(String(game.timeControl || headers?.TimeControl || '').trim());
+  return m && +m[1] > 0 ? { base: +m[1], inc: +(m[2] || 0) } : null;
+}
+
+/**
+ * Temps passé sur chaque demi-coup (secondes) : pendule du joueur avant son coup (deux demi-coups plus tôt,
+ * ou le temps de base au premier coup) − pendule après le coup + incrément (chess.com l'ajoute après le coup).
+ * Renvoie { spent: [], left: [] } (left : temps qu'il restait avant de jouer), ou null sans pendule.
+ */
+export function moveTimes(clocks, tc) {
+  if (!clocks || !tc) return null;
+  const left = clocks.map((c, i) => (i >= 2 ? clocks[i - 2] : tc.base));
+  const spent = clocks.map((c, i) => (Number.isFinite(c) && Number.isFinite(left[i]) ? Math.max(0, Math.round((left[i] - c + tc.inc) * 10) / 10) : null));
+  return { spent, left };
+}
+
+/**
+ * Coup joué trop vite : moins de 5 s (ou de 2 % du temps de base quand c'est moins : 3,6 s en 3 minutes,
+ * 1,2 s en bullet, où 5 s sont déjà une longue réflexion) alors qu'il restait plus de la moitié du temps
+ * de base à la pendule (pas de manque de temps pour l'excuser). Jamais plus de 5 s : le conseil donné
+ * ensuite est de prendre 10 secondes de vérification.
+ */
+export const tooFast = (spent, left, tc) => !!tc && Number.isFinite(spent) && Number.isFinite(left) && spent < Math.min(5, 0.02 * tc.base) && left > tc.base / 2;
+
 const MOTIFS = ['fourchette', 'clouage', 'enfilade', 'decouverte', 'echec-double'];
 const TACTICAL = new Set(['gain', 'mat', ...MOTIFS]);
 
@@ -414,13 +452,17 @@ export function deriveGame(game, parsed, review) {
   const fens = [startFen, ...moves.map((m) => m.after)];
   const me = game.userColor;
   const sign = me === 'w' ? 1 : -1;
-  const base = +(game.timeControl || headers.TimeControl || '').split('+')[0] || null;
+  const tc = timeControlOf(game, headers);
+  const base = tc?.base || null;
   const clocks = clocksOf(game.pgn, moves.length);
+  // temps passé sur chaque coup (avec l'incrément) ; seulement si chaque coup a sa pendule, sinon tout serait décalé
+  const times = clocks?.length === moves.length ? moveTimes(clocks, tc) : null;
   const ev = review.evals;
   const userCp = (k) => cpOfEval(ev[k]) * sign; // évaluation pour l'utilisateur dans la position k
   const out = {
     v: REVIEW_VERSION,
     tagsV: TAGS_VERSION,
+    derivedV: DERIVED_VERSION,
     score: userScore(game, headers),
     moves: 0,
     acc: { o: [], m: [], e: [] },
@@ -491,14 +533,18 @@ export function deriveGame(game, parsed, review) {
     }
     if (phase === 'o') cats.push('ouverture');
     if (phase === 'e') cats.push('finale');
-    const clock = clocks ? clocks[i] : null;
+    const clock = clocks ? clocks[i] ?? null : null;
     if (clock !== null && base && (clock < 30 || clock < base * 0.1)) cats.push('zeitnot');
+    // gaffe ou erreur jouée en quelques secondes alors que la pendule laissait tout le temps de vérifier
+    const spent = times?.spent[i] ?? null;
+    if (cls !== 'inaccuracy' && tooFast(spent, times?.left[i], tc)) cats.push('trop-vite');
     out.errors.push({
       i,
       cls,
       phase,
       cats,
       clock,
+      spent,
       fen: fens[i],
       played,
       best,
@@ -520,14 +566,17 @@ export function deriveGame(game, parsed, review) {
   out.brilliants = out.brilliantIdx.length;
   out.greats = out.greatIdx.length;
   out.misses = out.missIdx.length;
-  out.estElo = (review.elo || computeGameElo(moves, ev))[me] ?? null;
+  // partie trop courte : pas d'Elo (ni ici, ni dans la moyenne des progrès)
+  out.short = out.moves < MIN_ELO_MOVES;
+  out.estElo = out.short ? null : (review.elo || computeGameElo(moves, ev))[me] ?? null;
   return out;
 }
 
 /** Recalcule les données dérivées si le format a changé (sans relancer le moteur). */
 export function ensureDerived(game) {
   if (!game.review?.evals) return game.review?.derived || null;
-  if (game.review.derived?.v === REVIEW_VERSION && game.review.derived.tagsV === TAGS_VERSION) return game.review.derived;
+  const dv = game.review.derived;
+  if (dv?.v === REVIEW_VERSION && dv.tagsV === TAGS_VERSION && dv.derivedV === DERIVED_VERSION) return dv;
   const parsed = parsePgn(game.pgn);
   if (!parsed) return null;
   // anciens bilans : on ajoute les étiquettes et l'Elo estimé (calculés sans moteur)
@@ -536,17 +585,77 @@ export function ensureDerived(game) {
   return game.review.derived;
 }
 
-/** Enregistre l'analyse et transforme les erreurs en exercices « Mes erreurs ». */
+/** Nouvelles positions « Mes erreurs » par jour : un premier bilan de 20 parties n'en déverse pas 60 d'un coup. */
+export const NEW_MISTAKES_PER_DAY = 10;
+const MAX_MISTAKES = 400;
+
+/** Gravité d'une erreur : les gaffes d'abord, puis la plus grosse perte. */
+const severity = (m) => (m.cls === 'blunder' ? 1e6 : 0) + Math.min(Math.max(0, m.loss || 0), 99999);
+
+/** Début (minuit, heure du téléphone) du jour k à partir d'aujourd'hui. */
+function dayStart(k) {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + k).getTime();
+}
+
+/**
+ * Programme de nouvelles cartes « Mes erreurs » : NEW_MISTAKES_PER_DAY par jour au plus, les plus graves d'abord,
+ * les suivantes les jours d'après (champ due). `plan` garde le jour prévu : tant qu'une carte n'a pas été jouée
+ * (due === plan) et que son jour n'est pas passé, elle reste dans la file et peut céder sa place à une erreur
+ * plus grave d'une partie analysée ensuite. Les cartes déjà jouées ou plus anciennes ne bougent pas.
+ * Modifie `list` sur place.
+ */
+export function planMistakes(list, fresh, now = Date.now()) {
+  const t = today();
+  const waiting = new Set(list.filter((m) => m.plan && m.due === m.plan && dayOf(m.plan) >= t));
+  const used = {}; // places déjà prises chaque jour par des cartes nouvelles déjà jouées
+  for (const m of list) if (m.plan && !waiting.has(m)) used[dayOf(m.plan)] = (used[dayOf(m.plan)] || 0) + 1;
+  const queue = [...waiting, ...fresh].sort((a, b) => severity(b) - severity(a));
+  let k = 0;
+  for (const m of queue) {
+    while ((used[dayOf(dayStart(k))] || 0) >= NEW_MISTAKES_PER_DAY) k++;
+    const day = dayOf(dayStart(k));
+    used[day] = (used[day] || 0) + 1;
+    // aujourd'hui : tout de suite ; une carte déjà prévue aujourd'hui garde son heure
+    m.plan = m.due = k === 0 ? (m.plan && dayOf(m.plan) === t ? m.plan : now) : dayStart(k);
+  }
+  // dans la liste, la file vient après les cartes déjà en cours, par jour puis par gravité
+  const kept = list.filter((m) => !waiting.has(m));
+  queue.sort((a, b) => dayOf(a.plan).localeCompare(dayOf(b.plan)) || severity(b) - severity(a));
+  list.splice(0, list.length, ...kept, ...queue);
+  return list;
+}
+
+/**
+ * Limite de MAX_MISTAKES cartes : on retire d'abord les cartes en attente des jours les plus lointains
+ * (les moins graves), puis, comme avant, les plus anciennes.
+ */
+function trimMistakes(list) {
+  let excess = list.length - MAX_MISTAKES;
+  const t = today();
+  for (let i = list.length - 1; i >= 0 && excess > 0; i--) {
+    const m = list[i];
+    if (m.plan && m.due === m.plan && dayOf(m.plan) > t) {
+      list.splice(i, 1);
+      excess--;
+    }
+  }
+  if (excess > 0) list.splice(0, excess);
+}
+
+/** Enregistre l'analyse et transforme les erreurs en exercices « Mes erreurs » (10 nouvelles par jour). */
 export function saveReview(game, review) {
   update((d) => {
     const gg = d.games.find((x) => x.id === game.id);
     if (gg) gg.review = review;
+    const fresh = [];
     for (const e of review.derived?.errors || []) {
       if (!['mistake', 'blunder'].includes(e.cls) || !e.best) continue;
-      if (d.mistakes.some((m) => m.fen === e.fen)) continue;
-      d.mistakes.push({ id: uid(), fen: e.fen, best: e.best, played: e.played, gameId: game.id, box: 0, due: Date.now(), cats: e.cats, label: `${game.label || ''} — coup ${Math.floor(e.i / 2) + 1}` });
+      if (d.mistakes.some((m) => m.fen === e.fen) || fresh.some((m) => m.fen === e.fen)) continue;
+      fresh.push({ id: uid(), fen: e.fen, best: e.best, played: e.played, gameId: game.id, box: 0, due: 0, cats: e.cats, cls: e.cls, loss: e.loss, label: `${game.label || ''} — coup ${Math.floor(e.i / 2) + 1}` });
     }
-    if (d.mistakes.length > 400) d.mistakes.splice(0, d.mistakes.length - 400);
+    if (fresh.length) planMistakes(d.mistakes, fresh);
+    trimMistakes(d.mistakes);
   });
 }
 

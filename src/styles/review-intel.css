@@ -54,3 +54,22 @@
 .ri-level-row > div + div { flex: 0 1 auto; max-width: 45%; }
 .ri-level-row .big { white-space: nowrap; }
 .ri-tags-line { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+
+/* Partie : coach en direct qui fait chercher avant d'expliquer.
+   Compacte : sur 780 px de haut, l'alerte entière (titre, questions, boutons) tient sous l'échiquier. */
+.coach:has(> .lc-alert) { border-left-color: var(--c-mistake); padding: 8px 12px; margin: 8px 0; }
+.lc-alert .coach-title { color: var(--c-mistake); margin-bottom: 2px; justify-content: space-between; line-height: 1.25; }
+.lc-alert .coach-title .badge { font-weight: 600; }
+.lc-alert p { margin: 2px 0 4px; }
+.lc-lead { font-size: 0.92rem; }
+.lc-questions { margin: 0 0 6px; padding-left: 22px; font-size: 0.92rem; line-height: 1.35; }
+.lc-questions li { margin: 0; }
+.lc-threat { border-left: 3px solid #e68f00; background: rgba(230, 143, 0, 0.1); border-radius: 6px; padding: 4px 8px; font-size: 0.92rem; line-height: 1.35; }
+.lc-actions .btn.block { margin: 0 0 6px; }
+.lc-row { display: flex; gap: 6px; }
+.lc-row .btn { flex: 1 1 0; min-width: 0; padding: 4px 6px; line-height: 1.2; white-space: normal; text-align: center; justify-content: center; }
+.lc-rescued { border-left: 3px solid var(--accent); padding-left: 8px; margin: 8px 0; }
+
+/* Bilan : légende de la courbe et évaluations « pour toi » */
+.ri-graph-key { margin: -2px 0 6px; }
+.ri-short { white-space: normal; }

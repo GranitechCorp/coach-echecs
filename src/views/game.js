@@ -1,12 +1,13 @@
-// Partie contre l'ordinateur : indices, « pourquoi ? », coach en direct, reprise de coup.
+// Partie contre l'ordinateur : indices, « pourquoi ? », coach en direct (qui fait chercher avant d'expliquer),
+// reprise de coup.
 import { Chess } from 'chess.js';
-import { db, update, uid, today } from '../storage.js';
+import { db, update, uid, today, trimGames } from '../storage.js';
 import { setTitle, toast, esc, md, evalBarHtml, setEvalBar, moveListHtml, classBadge, confirmDialog, moveSound, sleep } from '../ui.js';
 import { createBoard, arrow } from '../board.js';
 import { getBotEngine, getAnalysisEngine } from '../engine.js';
 import { chooseBotMove, levelFor } from '../bot.js';
-import { playUci, uciOf, cgColor, cpWhite, START_FEN, gameOverText, colorName, fig, uciToSan, evalText } from '../chessutil.js';
-import { classifyMove, explainBest, explainMistake, describeMove, adviceFor, CLASSES } from '../explain.js';
+import { playUci, uciOf, cgColor, cpWhite, START_FEN, gameOverText, colorName, fig, uciToSan } from '../chessutil.js';
+import { classifyMove, explainBestFor, explainMistakeFor, describeMove, adviceFor, CLASSES, evalLabelFor, mistakeKind, MISTAKE_ALERTS, threatSentence } from '../explain.js';
 import { promptBestMove, promptPlayedMove } from '../prompts.js';
 import { showCoach } from './coach-panel.js';
 
@@ -20,7 +21,7 @@ export function startGame({ startFen = START_FEN, prefix = '', userColor = 'w', 
     for (const san of prefix.split(/\s+/).filter(Boolean)) moves.push(uciOf(c.move(san)));
   }
   update((s) => {
-    s.currentGame = { id: uid(), startFen, moves, userColor, elo, liveCoach, showEval, hints: 0, takebacks: 0, over: false, label, created: new Date().toISOString() };
+    s.currentGame = { id: uid(), startFen, moves, userColor, elo, liveCoach, showEval, hints: 0, takebacks: 0, rescued: [], over: false, label, created: new Date().toISOString() };
   });
   getBotEngine().newGame();
   location.hash = '#/game';
@@ -57,6 +58,8 @@ export function render(root) {
     <div class="moves card" id="moves"></div>`;
 
   const statusEl = root.querySelector('#status');
+  const actionsEl = root.querySelector('.actions');
+  const menuEl = root.querySelector('#menu');
   const coachEl = root.querySelector('#coach');
   const movesEl = root.querySelector('#moves');
   const thinkingEl = root.querySelector('.thinking');
@@ -71,9 +74,11 @@ export function render(root) {
   let alive = true;
   let busy = false; // l'ordinateur joue
   let pendingDecision = false; // coach en direct : on attend « reprendre / continuer »
+  let pendingAlert = null; // erreur signalée par le coach : { fenBefore, uci, before, after, cls }
   let posAnalysis = null; // { fen, promise, lines }
   let hintLevel = 0;
   let classes = g.classes || []; // classification des coups de l'utilisateur, par index de coup
+  g.rescued ||= []; // gaffes rattrapées : coups repris après l'alerte du coach (« position|coup »)
 
   function save() {
     update((s) => {
@@ -169,57 +174,150 @@ export function render(root) {
       save();
       renderMoves();
       setEvalBar(root, after[0], board.orientation);
-      if (res.cls === 'mistake' || res.cls === 'blunder') {
-        pendingDecision = true;
-        board.setInteractive(null);
-        board.setShapes([arrow(uciOf(m), 'red')]);
-        const tags = describeMove(chess.fen(), after[0]?.pv[0] || '').tags;
-        setStatus(`${classBadge(res.cls)} <span class="muted">Tu peux reprendre ton coup.</span>`);
-        showCoach(coachEl, {
-          title: res.cls === 'blunder' ? '⚠️ Attention, ce coup est une gaffe' : '⚠️ Ce coup est une erreur',
-          paragraphs: [...explainMistake(fenBefore, uciOf(m), before, after).slice(0, 1), `*${adviceFor(tags)}*`, '<<decision>>'],
-          getPrompt: () => promptPlayedMove({ fen: fenBefore, playedUci: uciOf(m), linesBefore: before, linesAfter: after, userColor: g.userColor, history: chess.history().slice(0, -1), cls: CLASSES[res.cls].label }),
-        });
-        // les boutons de décision remplacent le marqueur
-        const txt = coachEl.querySelector('.coach-txt');
-        txt.innerHTML = txt.innerHTML.replace(
-          '<p>&lt;&lt;decision&gt;&gt;</p>',
-          `<div class="row wrap"><button class="btn primary small" data-dec="undo">↶ Reprendre mon coup</button><button class="btn small" data-dec="show">Voir pourquoi</button><button class="btn ghost small" data-dec="go">Continuer quand même</button></div>`,
-        );
-        coachEl.querySelector('[data-dec=undo]').onclick = () => {
-          pendingDecision = false;
-          takeBack();
-        };
-        coachEl.querySelector('[data-dec=show]').onclick = (e) => {
-          e.target.remove();
-          showCoach(coachEl, {
-            title: CLASSES[res.cls].label,
-            paragraphs: explainMistake(fenBefore, uciOf(m), before, after),
-            getPrompt: () => promptPlayedMove({ fen: fenBefore, playedUci: uciOf(m), linesBefore: before, linesAfter: after, userColor: g.userColor, history: chess.history().slice(0, -1), cls: CLASSES[res.cls].label }),
-          });
-          const row = document.createElement('div');
-          row.className = 'row wrap';
-          row.innerHTML = '<button class="btn primary small" data-dec="undo">↶ Reprendre mon coup</button><button class="btn ghost small" data-dec="go">Continuer</button>';
-          coachEl.prepend(row);
-          row.querySelector('[data-dec=undo]').onclick = () => {
-            pendingDecision = false;
-            takeBack();
-          };
-          row.querySelector('[data-dec=go]').onclick = proceed;
-          board.setShapes([arrow(uciOf(m), 'red'), ...(before[0] ? [arrow(before[0].pv[0], 'green')] : []), ...(after[0] ? [arrow(after[0].pv[0], 'blue')] : [])]);
-        };
-        coachEl.querySelector('[data-dec=go]').onclick = proceed;
-        return;
-      }
+      if (res.cls === 'mistake' || res.cls === 'blunder') return alertMistake({ fenBefore, uci: uciOf(m), before, after, cls: res.cls });
     }
     botTurn();
   }
 
+  /** Le texte des 3 questions à se poser, vu depuis l'adversaire juste après ton coup (court : tout tient sous l'échiquier). */
+  const QUESTIONS = `
+    <ol class="lc-questions">
+      <li><b>Échecs</b>&nbsp;: lesquels peut-il me donner&nbsp;?</li>
+      <li><b>Prises</b>&nbsp;: que peut-il prendre&nbsp;? Est-ce défendu&nbsp;?</li>
+      <li><b>Menaces</b>&nbsp;: que menace-t-il au coup suivant&nbsp;?</li>
+    </ol>`;
+
+  /** Hauteurs de la barre du haut (collante) et de la barre d'onglets (fixe) : la partie visible de la page est entre les deux. */
+  function visibleBand() {
+    const top = document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0;
+    const tab = document.querySelector('.tabbar');
+    const bottom = tab && !tab.hidden ? tab.getBoundingClientRect().top : innerHeight;
+    return { top: Math.max(0, top), bottom: Math.min(innerHeight, bottom) };
+  }
+
+  /**
+   * Fait défiler doucement la page pour que `el` soit entièrement visible (sans le cacher sous les barres).
+   * keepBoard : ne cache jamais le haut de l'échiquier (quitte à couper le bas de `el`).
+   */
+  function reveal(el, { keepBoard = false } = {}) {
+    if (!el || !alive) return;
+    const band = visibleBand();
+    const r = el.getBoundingClientRect();
+    let dy = 0;
+    if (r.bottom > band.bottom - 8) dy = r.bottom - (band.bottom - 8);
+    if (r.top - dy < band.top + 8) dy = r.top - (band.top + 8); // le haut d'abord
+    // keepBoard : l'échiquier entier passe avant le bas de `el` (on remonte même un peu s'il était coupé)
+    if (keepBoard) dy = Math.min(dy, root.querySelector('#board').getBoundingClientRect().top - band.top);
+    if (Math.abs(dy) >= 2) window.scrollTo({ top: window.scrollY + dy, behavior: 'smooth' });
+  }
+
+  /** Remet l'échiquier entier à l'écran s'il est en partie caché sous la barre du haut. */
+  function revealBoard() {
+    const band = visibleBand();
+    const r = root.querySelector('#board').getBoundingClientRect();
+    if (r.top < band.top) window.scrollTo({ top: Math.max(0, window.scrollY + r.top - band.top - 4), behavior: 'smooth' });
+  }
+
+  /** Pendant l'alerte, ses boutons remplacent la barre d'actions et la ligne d'état : l'alerte tient sous l'échiquier. */
+  function setDeciding(on) {
+    statusEl.hidden = on;
+    actionsEl.hidden = on;
+    if (on) menuEl.hidden = true;
+  }
+
+  /**
+   * Coach en direct : on prévient sans révéler (ni case ni coup) et on fait chercher d'abord.
+   * Ensuite le joueur choisit : reprendre et chercher, voir la menace, voir l'explication, ou continuer.
+   */
+  function alertMistake(alert) {
+    const { fenBefore, uci, before, after, cls } = alert;
+    pendingDecision = true;
+    pendingAlert = alert;
+    board.setInteractive(null);
+    board.setShapes([arrow(uci, 'red')]);
+    const kind = mistakeKind(fenBefore, uci, before, after);
+    const title = MISTAKE_ALERTS[kind] || (cls === 'blunder' ? 'Attention, ce coup est une gaffe' : 'Ce coup est une erreur');
+    setStatus(`${classBadge(cls)} <span class="muted">Cherche mieux avant de continuer.</span>`);
+    setDeciding(true);
+    coachEl.hidden = false;
+    coachEl.innerHTML = `
+      <div class="lc-alert">
+        <div class="coach-title"><span>⚠ ${esc(title)}</span>${MISTAKE_ALERTS[kind] ? classBadge(cls) : ''}</div>
+        <p class="lc-threat" hidden></p>
+        <p class="lc-lead">${kind === 'avantage' ? 'Tu avais mieux&nbsp;! Avant de rejouer, mets-toi à sa place&nbsp;:' : 'Reprends ton coup et cherche mieux. À sa place, après ton coup&nbsp;:'}</p>
+        ${QUESTIONS}
+        <div class="lc-actions">
+          <button class="btn primary block" data-dec="undo">↶ Reprendre et chercher mieux</button>
+          <div class="lc-row">
+            <button class="btn small" data-dec="threat">💡 Montre la menace</button>
+            <button class="btn small" data-dec="show">Voir l’explication</button>
+            <button class="btn ghost small" data-dec="go">Continuer quand même</button>
+          </div>
+        </div>
+      </div>`;
+    coachEl.querySelector('[data-dec=undo]').onclick = rescue;
+    coachEl.querySelector('[data-dec=go]').onclick = proceed;
+    coachEl.querySelector('[data-dec=threat]').onclick = (e) => {
+      const reply = after[0];
+      const txt = coachEl.querySelector('.lc-threat');
+      e.currentTarget.remove();
+      if (!reply?.pv?.[0]) return;
+      board.setShapes([arrow(uci, 'red'), arrow(reply.pv[0], 'yellow')]); // « yellow » de Chessground = orange
+      txt.textContent = threatSentence(chess.fen(), reply, g.userColor, kind);
+      txt.hidden = false;
+      coachEl.querySelector('.lc-lead').hidden = true; // la phrase de la menace prend sa place
+      // l'échiquier entier (avec la flèche) et la phrase, juste dessous, à l'écran ensemble
+      reveal(coachEl, { keepBoard: true });
+    };
+    coachEl.querySelector('[data-dec=show]').onclick = () => showMistake(alert);
+    // l'alerte arrive sous l'échiquier : on la fait monter doucement pour qu'elle soit lue tout de suite
+    reveal(coachEl);
+  }
+
+  /** L'explication complète (flèches comprises) : le coup joué, la réponse qui punit et le meilleur coup. */
+  function showMistake({ fenBefore, uci, before, after, cls }) {
+    const tags = describeMove(chess.fen(), after[0]?.pv[0] || '').tags;
+    showCoach(coachEl, {
+      title: `${classBadge(cls)}`,
+      paragraphs: [...explainMistakeFor(g.userColor, fenBefore, uci, before, after), `*${adviceFor(tags)}*`],
+      getPrompt: () => promptPlayedMove({ fen: fenBefore, playedUci: uci, linesBefore: before, linesAfter: after, userColor: g.userColor, history: chess.history().slice(0, -1), cls: CLASSES[cls].label }),
+    });
+    const row = document.createElement('div');
+    row.className = 'row wrap';
+    row.innerHTML = '<button class="btn primary small" data-dec="undo">↶ Reprendre mon coup</button><button class="btn ghost small" data-dec="go">Continuer quand même</button>';
+    coachEl.prepend(row);
+    row.querySelector('[data-dec=undo]').onclick = rescue;
+    row.querySelector('[data-dec=go]').onclick = proceed;
+    board.setShapes([arrow(uci, 'red'), ...(before[0] ? [arrow(before[0].pv[0], 'green')] : []), ...(after[0] ? [arrow(after[0].pv[0], 'blue')] : [])]);
+  }
+
+  /** Coup repris après l'alerte du coach : une gaffe rattrapée (comptée une fois par position et par coup). */
+  function rescue() {
+    const key = pendingAlert && `${pendingAlert.fenBefore}|${pendingAlert.uci}`;
+    if (key && !g.rescued.includes(key)) g.rescued.push(key);
+    pendingDecision = false;
+    pendingAlert = null;
+    setDeciding(false);
+    takeBack();
+    if (!busy) setStatus('↶ Coup repris. À toi de trouver mieux : échecs, prises, menaces !');
+    revealBoard();
+  }
+
   function proceed() {
     pendingDecision = false;
+    pendingAlert = null;
+    setDeciding(false);
     coachEl.hidden = true;
     board.setShapes([]);
+    revealBoard();
     botTurn();
+  }
+
+  /** Bilan du coach en direct pour l'écran de fin. */
+  function rescuedHtml() {
+    const n = (g.rescued || []).length;
+    if (!n) return '';
+    return `<p class="lc-rescued">🛟 Gaffes rattrapées grâce au coach : <b>${n}</b>. En vraie partie, personne ne te préviendra : prends l’habitude de te poser les 3 questions avant chaque coup.</p>`;
   }
 
   /** Reprend le dernier coup de l'utilisateur (et la réponse de l'ordinateur s'il a déjà joué). */
@@ -242,6 +340,9 @@ export function render(root) {
   async function finish(text, resultOverride) {
     if (g.over) return;
     g.over = true;
+    pendingDecision = false;
+    pendingAlert = null;
+    setDeciding(false);
     board.setInteractive(null);
     let result = resultOverride;
     if (!result) {
@@ -273,10 +374,11 @@ export function render(root) {
       label: `vs ordinateur ${g.elo} (${g.moves.length > 1 ? Math.ceil(g.moves.length / 2) : 0} coups)`,
       hints: g.hints,
       takebacks: g.takebacks,
+      rescued: (g.rescued || []).length,
     };
     update((s) => {
       if (!s.games.find((x) => x.id === g.id)) s.games.push(record);
-      if (s.games.length > 200) s.games.splice(0, s.games.length - 200);
+      trimGames(s, g.id);
       const r = (s.botResults[g.elo] ||= { w: 0, d: 0, l: 0 });
       if (userWon) r.w++;
       else if (draw) r.d++;
@@ -289,6 +391,7 @@ export function render(root) {
     coachEl.innerHTML = `
       <div class="coach-title">${verdict}</div>
       ${g.hints || g.takebacks ? `<p class="muted small">Indices utilisés : ${g.hints} · coups repris : ${g.takebacks}</p>` : ''}
+      ${rescuedHtml()}
       <div class="row wrap">
         <a class="btn primary" href="#/review/${g.id}">📋 Bilan de la partie</a>
         <button class="btn" id="again">↻ Revanche</button>
@@ -296,6 +399,9 @@ export function render(root) {
       </div>`;
     coachEl.querySelector('#again').onclick = () =>
       startGame({ userColor: g.userColor === 'w' ? 'b' : 'w', elo: g.elo, liveCoach: g.liveCoach, showEval: g.showEval });
+    // le menu (abandon) se referme et le verdict, avec les gaffes rattrapées, monte à l'écran
+    menuEl.hidden = true;
+    reveal(coachEl);
   }
 
   // ─── Boutons ───
@@ -318,7 +424,7 @@ export function render(root) {
       board.setShapes([arrow(best, 'green')]);
       showCoach(coachEl, {
         title: '💡 Le meilleur coup',
-        paragraphs: explainBest(fen, lines),
+        paragraphs: explainBestFor(g.userColor, fen, lines),
         getPrompt: () => promptBestMove({ fen, lines, userColor: g.userColor, history: chess.history() }),
       });
       setStatus('À toi de jouer.');
@@ -326,6 +432,7 @@ export function render(root) {
   };
 
   root.querySelector('#why').onclick = async () => {
+    if (pendingDecision && pendingAlert) return showMistake(pendingAlert); // garde les boutons « reprendre / continuer »
     const hist = chess.history({ verbose: true });
     // dernier coup de l'utilisateur
     let i = hist.length - 1;
@@ -338,7 +445,7 @@ export function render(root) {
       board.setShapes(lines.slice(0, 2).map((l, k) => arrow(l.pv[0], k === 0 ? 'green' : 'blue')));
       showCoach(coachEl, {
         title: 'Analyse de la position',
-        paragraphs: explainBest(fen, lines),
+        paragraphs: explainBestFor(g.userColor, fen, lines),
         getPrompt: () => promptBestMove({ fen, lines, userColor: g.userColor, history: chess.history() }),
       });
       g.hints++;
@@ -355,11 +462,11 @@ export function render(root) {
     if (!alive) return;
     const res = classifyMove({ cpBefore: cpWhite(before[0]), cpAfter: cpWhite(after[0]), color: g.userColor, isBest: before[0]?.pv[0] === played });
     const paras = ['inaccuracy', 'mistake', 'blunder'].includes(res.cls)
-      ? explainMistake(fenBefore, played, before, after)
+      ? explainMistakeFor(g.userColor, fenBefore, played, before, after)
       : [
           `**${CLASSES[res.cls].label}** : ${fig(hist[i].san)}.`,
           ...describeMove(fenBefore, played).facts.map((f) => '• ' + f),
-          ...(before[0] && before[0].pv[0] !== played ? [`Le moteur préférait ${fig(uciToSan(fenBefore, before[0].pv[0]))} (${evalText(before[0])}), mais ton coup est tout à fait jouable.`] : []),
+          ...(before[0] && before[0].pv[0] !== played ? [`Le moteur préférait ${fig(uciToSan(fenBefore, before[0].pv[0]))} (${evalLabelFor(before[0], g.userColor)}), mais ton coup est tout à fait jouable.`] : []),
         ];
     showCoach(coachEl, {
       title: `${classBadge(res.cls)}`,
@@ -371,7 +478,7 @@ export function render(root) {
   root.querySelector('#undo').onclick = () => {
     if (g.over) return toast('La partie est terminée.');
     if (!g.moves.length) return;
-    pendingDecision = false;
+    if (pendingDecision) return rescue(); // reprise après l'alerte du coach : gaffe rattrapée
     takeBack();
   };
   root.querySelector('#more').onclick = () => (root.querySelector('#menu').hidden ^= true);
@@ -397,7 +504,7 @@ export function render(root) {
   if (g.over) {
     setStatus('<b>Partie terminée.</b>');
     coachEl.hidden = false;
-    coachEl.innerHTML = `<div class="row wrap"><a class="btn primary" href="#/review/${g.id}">📋 Bilan de la partie</a><a class="btn" href="#/play">Nouvelle partie</a></div>`;
+    coachEl.innerHTML = `${rescuedHtml()}<div class="row wrap"><a class="btn primary" href="#/review/${g.id}">📋 Bilan de la partie</a><a class="btn" href="#/play">Nouvelle partie</a></div>`;
   } else if (chess.turn() !== g.userColor) botTurn();
 
   return () => {

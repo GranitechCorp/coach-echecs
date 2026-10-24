@@ -3,7 +3,7 @@
 import { db, update, today } from '../storage.js';
 import { setTitle, esc, md, toast } from '../ui.js';
 import { syncChesscom, TIME_FR } from '../chesscom.js';
-import { analyzeMany, REVIEW_VERSION } from '../analyzer.js';
+import { analyzeMany, REVIEW_VERSION, MIN_ELO_MOVES } from '../analyzer.js';
 import { computeInsights, filterGames, SKILLS, linesForFamily, lessonTitle } from '../insights.js';
 import { recommendOpenings, SLOTS } from '../advisor.js';
 import { buildProgram, isDone, itemHref } from '../program.js';
@@ -88,6 +88,7 @@ export function render(root) {
         <p class="small muted">Sur ${ins.analysed} parties analysées · ${dec1(ins.bpg)} gaffe${ins.bpg >= 2 ? 's' : ''} par partie. Touche une compétence pour savoir comment elle est calculée.</p>
         ${skillBars(SKILLS.map((k) => ({ label: k.label, value: ins.skills[k.id], help: k.help })))}
         ${tagsDiagnostic(ins)}
+        ${fastLine(ins)}
       </section>
 
       <section class="card">
@@ -252,7 +253,12 @@ export function render(root) {
       });
       analyzing = false;
       if (alive) {
-        toast('Analyse terminée ✓');
+        // « Mes erreurs » : 10 nouvelles positions par jour, les suivantes arrivent les jours d'après
+        const now = Date.now();
+        const ms = db().mistakes;
+        const dueNow = ms.filter((m) => m.due <= now).length;
+        const later = ms.filter((m) => m.due > now && m.plan && m.due === m.plan).length;
+        toast(dueNow ? `Analyse terminée ✓ ${dueNow} position${dueNow > 1 ? 's' : ''} à revoir aujourd’hui dans « Mes erreurs »${later ? `, ${later} les jours suivants` : ''}.` : 'Analyse terminée ✓', 5000);
         draw();
       }
     };
@@ -305,7 +311,14 @@ function chesscomElo(s) {
 
 /** Carte « Niveau de jeu estimé » : médiane des dernières parties, comparaison et courbe. */
 function levelCard(ins, s) {
-  if (!ins.estElo) return '';
+  if (!ins.estElo) {
+    // seulement des parties trop courtes : on dit pourquoi il n'y a pas encore d'estimation
+    if (!ins.estEloShort) return '';
+    return `<section class="card">
+    <h2>Niveau de jeu estimé</h2>
+    <p class="small muted">Pas encore d’estimation : ${ins.estEloShort > 1 ? `tes ${ins.estEloShort} parties analysées sont trop courtes` : 'ta partie analysée est trop courte'} (moins de ${MIN_ELO_MOVES} coups joués) pour estimer ton niveau. Analyse une partie plus longue.</p>
+  </section>`;
+  }
   const cc = chesscomElo(s);
   const n = ins.estEloN;
   const diff = cc ? ins.estElo - cc.value : 0;
@@ -324,17 +337,26 @@ function levelCard(ins, s) {
   return `<section class="card">
     <h2>Niveau de jeu estimé</h2>
     <div class="ri-level-row">
-      <div><div class="big">≈ ${ins.estElo}</div><div class="small muted">${n > 1 ? `médiane de tes ${n} dernières parties analysées` : 'd’après ta seule partie analysée'}</div></div>
+      <div><div class="big">≈ ${ins.estElo}</div><div class="small muted">${n > 1 ? `médiane de tes ${n} dernières parties analysées` : 'd’après une seule partie analysée'}</div></div>
       ${cc ? `<div><div class="big muted">${cc.value}</div><div class="small muted">${esc(cc.label)}</div></div>` : ''}
     </div>
     ${cmp ? `<p class="small">${cmp}</p>` : ''}
     ${n < 5 ? '<p class="small muted">Encore peu de parties : l’estimation deviendra fiable à partir de 5 à 10 parties analysées.</p>' : ''}
+    ${ins.estEloShort ? `<p class="small muted">${ins.estEloShort > 1 ? `${ins.estEloShort} parties trop courtes (moins de ${MIN_ELO_MOVES} coups joués) ne comptent pas` : `Une partie trop courte (moins de ${MIN_ELO_MOVES} coups joués) ne compte pas`} : on ne peut pas y estimer ton niveau.</p>` : ''}
     ${target}
     ${ins.estEloSeries.length >= 2 ? '<p class="small muted">Elo estimé à chaque partie</p><div id="est-chart"></div>' : ''}
     ${tags.length ? `<div class="ri-tags-line">${tags.map((t) => `<span class="badge ri-tag ri-${TAGS[t].css}"><b>${TAGS[t].sym}</b> ${tagCount(t, ins[{ brilliant: 'brilliants', great: 'greats', miss: 'misses' }[t]])}</span>`).join('')}</div>` : ''}
     ${lastB ? `<a class="btn small ri-btn-brilliant" href="#/review/${encodeURIComponent(lastB.gameId)}/${lastB.i}">💎 Revoir mon dernier coup brillant</a>` : ''}
     <p class="muted small">Estimation indicative, calculée comme l’« Elo de la partie » du bilan chess.com : plus tu perds peu de terrain à chaque coup (mesuré par Stockfish), plus elle est haute. Une partie isolée varie beaucoup : c’est la tendance qui compte.</p>
   </section>`;
+}
+
+/** Gaffes jouées trop vite (parties avec pendule seulement) : « 35 % (7 sur 20) ». */
+function fastLine(ins) {
+  const f = ins.fast;
+  if (!f?.of) return '';
+  return `<p class="small ri-fast"><b>⏱ Gaffes jouées trop vite : ${f.pct}\u00a0% (${f.n} sur ${f.of})</b></p>
+    <p class="small muted">Parmi tes gaffes et erreurs des parties avec pendule, celles jouées en moins de 5 secondes (en blitz et en bullet, moins de 2\u00a0% de ta cadence) alors qu’il te restait plus de la moitié de ton temps.${f.n ? ' Ces coups-là, tu aurais eu le temps de les vérifier.' : ' Bravo : tu prends le temps de vérifier dans les moments critiques.'}</p>`;
 }
 
 /** Ligne du diagnostic sur les coups brillants / forts et les occasions manquées. */

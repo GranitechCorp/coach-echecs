@@ -499,3 +499,173 @@ export function explainMiss(fen, playedUci, prev, e0, e1, mine = true) {
   if (mine) out.push('*Réflexe : après chaque coup adverse, demande-toi « qu’est-ce qu’il vient de laisser ? » — échecs, captures, menaces.*');
   return out;
 }
+
+// ─────────────── Point de vue du joueur (évaluations « pour toi ») ───────────────
+
+/**
+ * Évaluation lisible du point de vue de `color` : « +4,5 », « −0,4 », « tu as un mat en 3 »…
+ * e : ligne du moteur ({ white }) ou évaluation du bilan (avec `over` quand la partie est finie).
+ */
+export function evalTextFor(e, color) {
+  if (!e) return '…';
+  if (e.over) return e.over === 'draw' ? 'partie nulle' : e.over === color ? 'échec et mat, tu as gagné' : 'échec et mat, tu as perdu';
+  const s = e.white || { cp: 0 };
+  const sign = color === 'w' ? 1 : -1;
+  if (s.mate !== undefined) {
+    if (s.mate === 0) return 'échec et mat';
+    const m = s.mate * sign;
+    return m > 0 ? `tu as un mat en ${m}` : `ton adversaire a un mat en ${-m}`;
+  }
+  const v = Math.round(((s.cp || 0) * sign) / 10) / 10;
+  if (v === 0) return '0,0';
+  return (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1).replace('.', ',');
+}
+
+/** Pareil, prêt à mettre entre parenthèses : « pour toi : +1,2 » (un mat se dit déjà du point de vue du joueur). */
+export function evalLabelFor(e, color) {
+  const t = evalTextFor(e, color);
+  return /^[+−0]/.test(t) ? `pour toi : ${t}` : t;
+}
+
+/**
+ * explainMistake, mais lu par le joueur `pov` : l'évaluation est donnée « pour toi », et quand le coup
+ * expliqué est celui de l'adversaire, les phrases parlent de lui (« Ton adversaire a joué… »).
+ */
+export function explainMistakeFor(pov, fen, playedUci, linesBefore, linesAfter, opts = {}) {
+  const out = explainMistake(fen, playedUci, linesBefore, linesAfter, opts);
+  const mine = safeChess(fen)?.turn() !== otherColor(pov);
+  const best = linesBefore?.[0];
+  return out.map((p) => {
+    if (best) p = p.replace(`(${evalText(best)}).`, `(${evalLabelFor(best, pov)}).`);
+    if (mine) return p;
+    return p
+      .replace(/^Tu as joué /, 'Ton adversaire a joué ')
+      .replace(/^Ton adversaire peut répondre /, 'Tu pouvais répondre ')
+      .replace(' et il a un mat en ', ' avec un mat en ')
+      .replace(/ — tu perds environ (\d+) points de matériel\.$/, ' — tu gagnais environ $1 points de matériel.')
+      .replace(/^\*\*Il fallait jouer /, '**Il aurait dû jouer ');
+  });
+}
+
+/** explainBest avec les évaluations données « pour toi » (le joueur `pov` est celui qui a le trait). */
+export function explainBestFor(pov, fen, lines) {
+  const out = explainBest(fen, lines);
+  const swap = (p, l) => {
+    if (!l) return p;
+    const raw = evalText(l);
+    const nice = evalLabelFor(l, pov);
+    // un mat est déjà dit par la phrase qui suit : « (tu as un mat en 3) » plutôt que deux fois
+    if (l.white?.mate !== undefined) p = p.replace(`(${raw} — `, '(');
+    return p.replace(`(${raw} — `, `(${nice} — `).replace(`, ${raw})`, `, ${nice})`).replace(`(${raw})`, `(${nice})`);
+  };
+  return out.map((p) => swap(swap(p, lines?.[0]), lines?.[1]));
+}
+
+// ─────────────── Coach en direct : faire chercher avant d'expliquer ───────────────
+
+/** Titres de l'alerte : ils disent le genre d'erreur sans nommer ni la case ni le coup. */
+export const MISTAKE_ALERTS = {
+  mat: 'Ce coup laisse un mat',
+  materiel: 'Ce coup perd du matériel',
+  avantage: 'Ce coup gâche ton avantage',
+};
+
+/**
+ * Matériel gagné (+) ou perdu (-) par `color` le long de la variante, mesuré à la dernière position « calme »
+ * (le coup suivant de la variante n'est pas une prise) dans les `plies` premiers demi-coups : une dame qui prend
+ * au 7e demi-coup et se fait reprendre au 8e ne compte pas comme un gain. Sans position calme, comme pvMaterialSwing.
+ */
+function settledSwing(fen, pv, color, plies = 8) {
+  const c = safeChess(fen);
+  if (!c || !pv?.length) return 0;
+  const m0 = material(c);
+  const diff = () => {
+    const m = material(c);
+    return color === 'w' ? m.w - m.b - (m0.w - m0.b) : m.b - m.w - (m0.b - m0.w);
+  };
+  const steps = [];
+  for (const u of pv.slice(0, plies + 1)) {
+    const m = playUci(c, u);
+    if (!m) break;
+    steps.push({ capture: !!m.captured || !!m.promotion, swing: diff() });
+  }
+  const n = Math.min(plies, steps.length);
+  if (!n) return 0;
+  // dernière position calme : le demi-coup suivant n'est pas une prise (ou la variante s'arrête là)
+  for (let k = n - 1; k >= 0; k--) if (!steps[k + 1]?.capture) return steps[k].swing;
+  return steps[n - 1].swing;
+}
+
+/**
+ * Genre d'erreur d'un coup (vu par celui qui le joue) : 'mat' (l'adversaire a un mat), 'materiel'
+ * (la suite lui coûte au moins 2 points de plus que le meilleur coup), 'avantage' (il était nettement mieux)
+ * ou 'autre'. linesBefore : analyse avant le coup ; linesAfter : analyse après.
+ */
+export function mistakeKind(fen, playedUci, linesBefore, linesAfter) {
+  const c = safeChess(fen);
+  if (!c) return 'autre';
+  const color = c.turn();
+  const best = linesBefore?.[0];
+  const reply = linesAfter?.[0];
+  if (isMateFor(reply?.white, otherColor(color))) return 'mat';
+  // matériel une fois les échanges terminés (jamais au milieu d'une prise suivie d'une reprise)
+  const played = settledSwing(fen, [playedUci, ...(reply?.pv || [])], color, 8);
+  const bestSwing = best?.pv?.length ? settledSwing(fen, best.pv, color, 8) : 0;
+  if (played <= -2 && bestSwing - played >= 2) return 'materiel';
+  if (best && winOf(best.white, color) >= 60) return 'avantage';
+  return 'autre';
+}
+
+/**
+ * « Montre la menace » : la réponse adverse qui punit le coup, en une phrase pour le joueur `color`
+ * (celui qui vient de jouer). fenAfter : position après son coup ; reply : meilleure ligne adverse.
+ */
+export function threatSentence(fenAfter, reply, color, kind = 'autre') {
+  const t = punishment(fenAfter, reply, color);
+  const out = kind === 'avantage'
+    ? `${t || 'La flèche orange montre la meilleure réponse de ton adversaire.'} Et surtout, avant ton coup, tu avais bien mieux à jouer : cherche-le !`
+    : t || 'La flèche orange montre la meilleure réponse de ton adversaire : après elle, ta position devient nettement plus difficile.';
+  return out.replace(/ ([:;?!])/g, '\u00a0$1'); // « : » et « ! » ne partent jamais seuls à la ligne
+}
+
+/** La phrase de threatSentence, sans l'indice final ('' si la réponse ne punit rien de précis). */
+function punishment(fenAfter, reply, color) {
+  const uci = reply?.pv?.[0];
+  const before = safeChess(fenAfter);
+  const c = safeChess(fenAfter);
+  if (!uci || !c) return '';
+  const them = otherColor(color);
+  if (isMateFor(reply.white, them)) {
+    const n = Math.abs(reply.white.mate);
+    return n === 1 ? 'La flèche orange montre le mat : ton adversaire peut te mater tout de suite.' : `La flèche orange montre le début d’un mat en ${n} coups pour ton adversaire.`;
+  }
+  const m = playUci(c, uci);
+  if (!m) return '';
+  const tags = describeMove(fenAfter, uci).tags;
+  const swing = settledSwing(fenAfter, reply.pv, them, 8);
+  const loss = swing >= 2 ? ` Au bout de la suite, tu perds environ ${swing} points de matériel.` : '';
+  const start = 'La flèche orange montre la réponse qui te punit : ';
+  const moved = m.promotion || m.piece;
+  const piece = `${theName(moved)} adverse`;
+  // tes pièces attaquées par la pièce qui vient de bouger (le roi, une pièce plus chère ou mal défendue)
+  let targets = pieces(c, color).filter((p) => c.attackers(p.square, them).includes(m.to) && (p.type === 'k' || VALUE[p.type] > VALUE[moved] || isHanging(c, p.square)));
+  // le roi d'abord, puis les pièces les plus chères ; un pion ne compte pas dans une fourchette sur deux pièces
+  targets.sort((a, b) => (b.type === 'k' ? 99 : VALUE[b.type]) - (a.type === 'k' ? 99 : VALUE[a.type]));
+  if (targets.filter((p) => p.type !== 'p').length >= 2) targets = targets.filter((p) => p.type !== 'p');
+  const names = targets.map((p) => (p.type === 'k' ? 'ton roi' : possessive(p.type, true)));
+  const takes = m.captured ? `prend ${possessive(m.captured, true)} et ` : '';
+  if (targets.length >= 2) return `${start}une fourchette, ${piece} ${takes}attaque ${listFr(names)} en même temps.${loss}`;
+  if (m.captured) {
+    const free = !!before.get(m.to) && isHanging(before, m.to);
+    const fem = m.captured === 'r' || m.captured === 'q' ? 'e' : '';
+    return `${start}ton adversaire prend ${possessive(m.captured, true)}${free ? `, qui n’était pas assez défendu${fem}` : ''}.${loss}`;
+  }
+  if (tags.has('echec-double')) return `${start}un échec double, ton roi est obligé de bouger.${loss}`;
+  if (tags.has('clouage')) return `${start}un clouage, une de tes pièces ne peut plus bouger sans laisser plus gros derrière elle.${loss}`;
+  if (tags.has('enfilade')) return `${start}une enfilade, ta pièce attaquée doit bouger et celle qui est derrière tombe.${loss}`;
+  if (tags.has('decouverte')) return `${start}une attaque à la découverte, en bougeant, sa pièce ouvre la ligne d’une autre.${loss}`;
+  if (c.inCheck()) return `${start}un échec${names.length && targets[0].type !== 'k' ? ` qui attaque aussi ${names[0]}` : ''}.${loss}`;
+  if (targets.length === 1) return `${start}${piece} attaque ${names[0]}.${loss}`;
+  if (loss) return `La flèche orange montre la réponse qui te punit.${loss}`;
+  return '';
+}

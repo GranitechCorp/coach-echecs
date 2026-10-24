@@ -72,7 +72,7 @@ export function render(root) {
         <span>Départ ${startElo}</span>
         <span>🔥 ${s.streak.days} jour${s.streak.days > 1 ? 's' : ''} d’affilée</span>
       </div>
-      ${ins.estElo ? `<div class="small hero-est">Niveau de jeu estimé sur tes ${ins.estEloN} dernières parties analysées : <b>≈ ${ins.estElo}</b>${ins.brilliants ? ` · 💎 ${ins.brilliants} coup${ins.brilliants > 1 ? 's' : ''} brillant${ins.brilliants > 1 ? 's' : ''}` : ''}</div>` : ''}
+      ${ins.estElo ? `<div class="small hero-est">Niveau de jeu estimé sur ${ins.estEloN > 1 ? `tes ${ins.estEloN} dernières parties analysées` : 'une seule partie analysée'} : <b>≈ ${ins.estElo}</b>${ins.brilliants ? ` · 💎 ${ins.brilliants} coup${ins.brilliants > 1 ? 's' : ''} brillant${ins.brilliants > 1 ? 's' : ''}` : ''}</div>` : ''}
     </section>
 
     ${!items && vision.level !== 'solide' ? `<a class="card link-card vision-cta" href="#/vision"><b>👁 Vision de l’échiquier ${vision.dailyDone ? '✓' : ''}</b><span class="muted small">${vision.dailyDone ? 'Défi du jour fait. Bravo !' : `5 minutes par jour pour situer c4, c6 ou h7 sans regarder les lettres.${vision.bestFind ? ` Ton record : ${vision.bestFind} case${vision.bestFind > 1 ? 's' : ''} en 30 s.` : ' Commence par le défi du jour.'}`}</span></a>` : ''}

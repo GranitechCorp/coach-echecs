@@ -1,22 +1,41 @@
 // Bilan de partie : précision, Elo estimé, classification de chaque coup (avec coups brillants,
 // coups forts et occasions manquées comme sur chess.com), moments clés, explications.
 import { Chess } from 'chess.js';
-import { db, update, uid } from '../storage.js';
+import { db, update, uid, trimGames } from '../storage.js';
 import { setTitle, esc, md, toast, moveListHtml, classBadge } from '../ui.js';
 import { createBoard, arrow } from '../board.js';
 import { getAnalysisEngine } from '../engine.js';
 import { parsePgn, uciOf, winPct, evalText, pvToSan, fig, uciToSan, cgColor } from '../chessutil.js';
-import { explainMistake, describeMove, CLASSES, TAGS, tagCount, explainBrilliant, explainGreat, explainMiss, explainAlternative } from '../explain.js';
+import { explainMistakeFor, describeMove, CLASSES, TAGS, tagCount, explainBrilliant, explainGreat, explainMiss, explainAlternative, evalTextFor } from '../explain.js';
 import { promptPlayedMove, promptGameSummary } from '../prompts.js';
 import { showCoach } from './coach-panel.js';
 import { askCoach, coachReady } from '../coach-ai.js';
-import { analyzeGame, saveReview, cpOfEval, ensureDerived, ensureReviewExtras, sacrificeOf, REVIEW_VERSION } from '../analyzer.js';
+import { analyzeGame, saveReview, cpOfEval, ensureDerived, ensureReviewExtras, sacrificeOf, REVIEW_VERSION, MIN_ELO_MOVES } from '../analyzer.js';
 import { startGame } from './game.js';
 import { aiEnabled, gameSummaryLocal } from '../local-coach.js';
 import { frOpening } from '../data/opening-names.js';
+import { FAST_TIP } from '../insights.js';
 
 export const tab = 'profile';
 const DEPTH = 12;
+
+/** Durée lisible : « 3 s », « 1 min 12 s », « moins d’une seconde ». */
+function duration(sec) {
+  if (sec < 1) return 'moins d’une seconde';
+  const t = Math.round(sec);
+  if (t < 60) return `${t} s`;
+  const m = Math.floor(t / 60);
+  return t % 60 ? `${m} min ${t % 60} s` : `${m} min`;
+}
+
+/** Temps passé sur une erreur du joueur (parties avec pendule) et, si elle a été jouée trop vite, le conseil. */
+function timeNote(err) {
+  if (typeof err?.spent !== 'number') return null;
+  const left = typeof err.clock === 'number' ? duration(err.clock) : null;
+  if (err.cats?.includes('trop-vite')) return `⏱ **Joué en ${duration(err.spent)}**${left ? `, alors qu’il te restait ${left} à la pendule` : ''} : trop vite pour un moment critique. ${FAST_TIP}`;
+  if (err.cats?.includes('zeitnot') && left) return `⏱ Joué en ${duration(err.spent)}, ${err.clock < 1 ? 'avec ta pendule presque à zéro' : `alors qu’il ne te restait que ${left} à la pendule`}.`;
+  return `⏱ Joué en ${duration(err.spent)}${left ? ` (il te restait ${left} à la pendule)` : ''}.`;
+}
 
 /** Badge d'étiquette (coup brillant, coup fort, occasion manquée). */
 const tagBadge = (t) => (TAGS[t] ? `<span class="badge ri-tag ri-${TAGS[t].css}"><b>${TAGS[t].sym}</b> ${TAGS[t].label}</span>` : '');
@@ -86,10 +105,10 @@ export function render(root, id, startIdx) {
   function showReview(fresh) {
     const r = game.review;
     // anciens bilans : étiquettes, Elo estimé et données dérivées recalculés sans moteur
-    const derivedV = r.derived?.v;
+    const derived0 = r.derived;
     const changed = ensureReviewExtras(r, fens, moves);
     ensureDerived(game);
-    if (changed || derivedV !== r.derived?.v) update(() => {});
+    if (changed || derived0 !== r.derived) update(() => {}); // on garde le recalcul
     const me = game.userColor;
     const them = me === 'w' ? 'b' : 'w';
     const cpOf = cpOfEval;
@@ -112,16 +131,25 @@ export function render(root, id, startIdx) {
     const tagMarks = [...tagIdx.brilliant, ...tagIdx.great].map((i) => `<circle cx="${xOf(i + 1)}" cy="${yOf(i + 1)}" r="4" class="ri-mk-${tags[i]}" data-i="${i}"/>`).join('');
     const eloLine = (v, mine) => (v ? `<div class="ri-elo${mine ? '' : ' muted'}">Elo estimé ≈ <b>${v}</b></div>` : '');
     const acplMe = r.acpl?.[me];
+    // partie trop courte : pas d'Elo estimé (quelques coups de théorie suffiraient à afficher 2800)
+    const myMoves = moves.filter((m) => m.color === me).length;
+    const short = myMoves < MIN_ELO_MOVES;
+    const myElo = short ? null : elo[me];
+    const shortLine = short ? `<div class="ri-elo ri-short muted small">Partie trop courte pour estimer ton niveau</div>` : '';
 
     root.innerHTML = `
       <section class="card">
         <div class="row between"><b>${esc(headers.White || '?')} – ${esc(headers.Black || '?')}</b><span class="badge">${esc(headers.Result || game.result || '')}</span></div>
         ${r.opening ? `<p class="muted small">📖 ${esc(frOpening(r.opening))}</p>` : ''}
         <div class="acc-row">
-          <div><div class="big">${Math.round(r.accuracy[me])}%</div><div class="muted small">ta précision</div>${eloLine(elo[me], true)}</div>
-          <div><div class="big muted">${Math.round(r.accuracy[them])}%</div><div class="muted small">adversaire</div>${eloLine(elo[them], false)}</div>
+          <div><div class="big">${Math.round(r.accuracy[me])}%</div><div class="muted small">ta précision</div>${eloLine(myElo, true)}${shortLine}</div>
+          <div><div class="big muted">${Math.round(r.accuracy[them])}%</div><div class="muted small">adversaire</div>${short ? '' : eloLine(elo[them], false)}</div>
         </div>
-        ${elo[me] ? `<details class="ri-help small"><summary>D’où vient l’Elo estimé ?</summary>
+        ${short ? `<details class="ri-help small"><summary>Pourquoi pas d’Elo estimé ?</summary>
+          <p>Tu n’as joué que ${myMoves} coup${myMoves > 1 ? 's' : ''} dans cette partie. Il en faut au moins ${MIN_ELO_MOVES} pour estimer un niveau : sur une partie aussi courte, quelques coups de théorie ou une seule gaffe donneraient un chiffre sans rapport avec ton jeu.</p>
+          <p class="muted">Elle ne compte pas non plus dans ton Elo estimé moyen de « Mes progrès ».</p>
+        </details>` : ''}
+        ${myElo ? `<details class="ri-help small"><summary>D’où vient l’Elo estimé ?</summary>
           <p>C’est une estimation <b>indicative</b>, calculée comme l’« Elo de la partie » du bilan chess.com : Stockfish mesure combien chaque coup fait perdre${acplMe !== null && acplMe !== undefined ? ` (pour toi, en moyenne ${acplMe} centipion${acplMe > 1 ? 's' : ''} par coup, ${acplMe < 5 ? 'presque rien' : `soit ${(acplMe / 100).toFixed(1).replace('.', ',')} pion${acplMe >= 200 ? 's' : ''}`})` : ''}. Moins tu perds, plus l’estimation est haute.</p>
           <p class="muted">Sur une seule partie, ça varie beaucoup : regarde plutôt la tendance dans « Mes progrès ».</p>
         </details>` : ''}
@@ -133,6 +161,7 @@ export function render(root, id, startIdx) {
           .map((c) => `<span class="badge c-${CLASSES[c].css}">${CLASSES[c].sym} ${r.counts[me][c]} ${(r.counts[me][c] > 1 ? CLASSES[c].plural : CLASSES[c].label).toLowerCase()}</span>`)
           .join('')}</div>
         <svg class="graph" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polygon points="0,${H} ${pts} ${W},${H}" class="g-area"/><line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" class="g-mid"/><polyline points="${pts}" class="g-line"/>${marks}${tagMarks}</svg>
+        <p class="muted small ri-graph-key">${me === 'b' ? 'Courbe : la zone claire, c’est l’avantage des Blancs. Tu as les Noirs : plus elle est basse, mieux c’est pour toi.' : 'Courbe : la zone claire, c’est l’avantage des Blancs (toi). Plus elle est haute, mieux c’est pour toi.'} Dans les explications, les évaluations sont données pour toi (+1 ≈ un pion d’avance).</p>
         <div class="row wrap">
           ${keyIdx.length ? `<button class="btn small" id="first-key">🎯 Voir mes erreurs (${keyIdx.length})</button>` : '<span class="muted small">Aucune grosse erreur : bravo !</span>'}
           ${tagIdx.brilliant.length ? `<button class="btn small ri-btn-brilliant" id="ri-brilliant">💎 Mes coups brillants (${tagIdx.brilliant.length})</button>` : ''}
@@ -216,10 +245,10 @@ export function render(root, id, startIdx) {
         const prev = moves[cur - 1];
         paras = explainMiss(fens[cur], played, { san: prev?.san, cls: r.classes[cur - 1], num: cur > 0 ? numOf(cur - 1) : '' }, before, after, mine);
         if (mine) {
-          const rest = explainMistake(fens[cur], played, linesB, linesA, { withBest: false }).slice(1);
+          const rest = explainMistakeFor(me, fens[cur], played, linesB, linesA, { withBest: false }).slice(1);
           if (rest.length) paras.push('#### Ce que ton coup permet', ...rest);
         }
-      } else if (['inaccuracy', 'mistake', 'blunder'].includes(cls)) paras = explainMistake(fens[cur], played, linesB, linesA);
+      } else if (['inaccuracy', 'mistake', 'blunder'].includes(cls)) paras = explainMistakeFor(me, fens[cur], played, linesB, linesA);
       else if (cls === 'book') paras = [`Coup de théorie (${frOpening(r.opening) || 'ouverture'}).`];
       else {
         const facts = describeMove(fens[cur], played).facts;
@@ -227,7 +256,9 @@ export function render(root, id, startIdx) {
         if (before.pv[0] && before.pv[0] !== played) paras.push(`Le moteur préférait ${fig(uciToSan(fens[cur], before.pv[0]))}.`);
         if (!paras.length) paras.push('Coup solide.');
       }
-      paras.push(`*Évaluation : ${evalText(before)} → ${evalText(after)}*`);
+      const time = mine ? timeNote((r.derived?.errors || []).find((e) => e.i === cur)) : null;
+      if (time) paras.push(time);
+      paras.push(`*Évaluation pour toi : ${evalTextFor(before, me)} → ${evalTextFor(after, me)}*`);
       showCoach(coachEl, {
         title: `${who} ${num}${fig(m.san)} ${classBadge(cls)}${tagBadge(tag)}`,
         paragraphs: paras,
@@ -352,7 +383,7 @@ export function importGame({ pgn, userColor, label, source = 'import', result })
   const id = uid();
   update((s) => {
     s.games.push({ id, date: new Date().toISOString(), pgn, userColor, result: result || '', source, label });
-    if (s.games.length > 200) s.games.splice(0, s.games.length - 200);
+    trimGames(s, id);
   });
   return id;
 }

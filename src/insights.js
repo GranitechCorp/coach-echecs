@@ -1,9 +1,16 @@
 // Diagnostic personnalisé : à partir de tes parties analysées, on mesure tes compétences,
 // on repère tes erreurs typiques et on en déduit des priorités de travail.
-import { ensureDerived } from './analyzer.js';
+import { ensureDerived, MIN_ELO_MOVES } from './analyzer.js';
+import { update } from './storage.js';
 import { LESSONS } from './data/lessons.js';
 import { OPENING_LINES } from './data/openings.js';
 import { frOpening } from './data/opening-names.js';
+
+/** Conseil contre les coups joués trop vite (faiblesse « trop vite » et bilan de partie). */
+export const FAST_TIP = 'Avant chaque prise, chaque échec et chaque coup de dame, prends 10 secondes de vérification anti-gaffe : quels échecs, quelles prises et quelles menaces aura ton adversaire après ton coup ?';
+/** À partir de quelle part de gaffes jouées trop vite on en fait une priorité (et au moins FAST_MIN cas). */
+const FAST_RATE = 0.25;
+const FAST_MIN = 3;
 
 export const CATEGORIES = {
   'piece-en-prise': { label: 'Pièces laissées en prise', lessons: ['routine', 'valeurs'], theme: 'hangingPiece', tip: 'Avant chaque coup : « après mon coup, une de mes pièces est-elle attaquée sans être assez défendue ? »' },
@@ -17,6 +24,7 @@ export const CATEGORIES = {
   ouverture: { label: 'Erreurs dans l’ouverture', lessons: ['principes'], theme: 'opening', tip: 'Développe, roque, et entraîne-toi sur les lignes de ton répertoire.' },
   finale: { label: 'Erreurs en finale', lessons: ['pions', 'tours', 'mat-tour'], theme: 'endgame', tip: 'En finale : active ton roi, crée un pion passé, mets la tour derrière les pions passés.' },
   zeitnot: { label: 'Erreurs par manque de temps', lessons: ['penser'], theme: 'mateIn1', tip: 'Joue plus vite l’ouverture que tu connais et garde au moins 1 à 2 minutes pour la fin de partie.' },
+  'trop-vite': { label: 'Coups critiques joués trop vite', lessons: ['routine', 'penser'], theme: 'hangingPiece', tip: FAST_TIP },
 };
 
 export const SKILLS = [
@@ -54,7 +62,17 @@ export function familyOf(g) {
 export function computeInsights(allGames) {
   const games = allGames.filter((g) => g.pgn);
   const analysed = games.filter((g) => g.review?.evals || g.review?.derived);
-  const D = analysed.map((g) => ({ g, d: ensureDerived(g) })).filter((x) => x.d);
+  let recomputed = false;
+  const D = analysed
+    .map((g) => {
+      const old = g.review?.derived;
+      const d = ensureDerived(g);
+      if (d && d !== old) recomputed = true;
+      return { g, d };
+    })
+    .filter((x) => x.d);
+  // bilans mis à jour sans moteur (nouvelle version des données dérivées) : on les garde, pour ne pas les recalculer à chaque écran
+  if (recomputed) update(() => {});
   const n = D.length;
 
   // ── compétences ──
@@ -71,6 +89,7 @@ export function computeInsights(allGames) {
   let losses = 0;
   let zeitnotErrors = 0;
   let errorsWithClock = 0;
+  const fast = { n: 0, of: 0 }; // gaffes et erreurs jouées trop vite, parmi celles dont on connaît le temps passé
   const cats = {};
   const catsRaw = {};
   const catsGames = {};
@@ -102,6 +121,10 @@ export function computeInsights(allGames) {
         (examples[c] ||= []).push({ gameId: g.id, i: e.i, fen: e.fen, played: e.played, best: e.best, cls: e.cls });
       }
       if (e.cats.includes('zeitnot')) zeitnotErrors++;
+      if (typeof e.spent === 'number') {
+        fast.of++;
+        if (e.cats.includes('trop-vite')) fast.n++;
+      }
     }
   }
   const bpg = n ? blunders / n : null;
@@ -153,9 +176,10 @@ export function computeInsights(allGames) {
   const style = computeStyle(D, games);
 
   // ── priorités ──
-  const weaknesses = rankWeaknesses({ n, cats, catsRaw, catsGames, examples, skills, bpg, openingList, timeLosses, losses });
+  fast.pct = fast.of ? pct(fast.n, fast.of) : null;
+  const weaknesses = rankWeaknesses({ n, cats, catsRaw, catsGames, examples, skills, bpg, openingList, timeLosses, losses, fast });
 
-  return { total: games.length, analysed: n, blunders, mistakes, bpg, skills, cats, catsRaw, examples, openings: openingList, style, weaknesses, timeLosses, losses, ...level };
+  return { total: games.length, analysed: n, blunders, mistakes, bpg, skills, cats, catsRaw, examples, openings: openingList, style, weaknesses, timeLosses, losses, fast, ...level };
 }
 
 const median = (a) => {
@@ -165,13 +189,18 @@ const median = (a) => {
   return b.length % 2 ? b[k] : (b[k - 1] + b[k]) / 2;
 };
 
+/** Coups joués par le joueur dans une partie analysée (données dérivées, sinon d'après le nombre de demi-coups). */
+const userMoves = (g, d) => (typeof d.moves === 'number' ? d.moves : Math.floor(((g.review?.n || 0) + (g.userColor === 'w' ? 1 : 0)) / 2));
+
 /**
  * Elo estimé : médiane des 10 dernières parties analysées (indicatif), courbe par partie,
  * et totaux de coups brillants / forts / occasions manquées.
+ * Les parties de moins de MIN_ELO_MOVES coups joués n'ont pas d'Elo : elles ne comptent ni dans la médiane ni dans la courbe.
  */
 function computeLevel(D) {
   const dated = [...D].sort((a, b) => String(a.g.date || '').localeCompare(String(b.g.date || '')));
-  const withElo = dated
+  const long = dated.filter(({ g, d }) => userMoves(g, d) >= MIN_ELO_MOVES);
+  const withElo = long
     .map(({ g, d }) => ({ g, d, elo: d.estElo ?? g.review?.elo?.[g.userColor] ?? null, acpl: g.review?.acpl?.[g.userColor] ?? null }))
     .filter((x) => x.elo);
   const last = withElo.slice(-10);
@@ -192,6 +221,7 @@ function computeLevel(D) {
     estEloN: last.length,
     estAcpl: acpls.length ? Math.round(median(acpls)) : null,
     estEloSeries: withElo.map((x) => ({ date: x.g.date, elo: x.elo, gameId: x.g.id })),
+    estEloShort: dated.length - long.length, // parties trop courtes, laissées de côté
     brilliants,
     greats,
     misses,
@@ -259,12 +289,12 @@ function computeStyle(D, games) {
   };
 }
 
-function rankWeaknesses({ n, cats, catsRaw, catsGames, examples, skills, bpg, openingList, timeLosses, losses }) {
+function rankWeaknesses({ n, cats, catsRaw, catsGames, examples, skills, bpg, openingList, timeLosses, losses, fast }) {
   if (!n) return [];
   const list = [];
   for (const [id, w] of Object.entries(cats)) {
     const def = CATEGORIES[id];
-    if (!def || catsRaw[id] < 2) continue; // un cas isolé n'est pas une tendance
+    if (!def || catsRaw[id] < 2 || id === 'trop-vite') continue; // un cas isolé n'est pas une tendance ; « trop vite » : plus bas
     const perGame = w / n;
     const inGames = catsGames[id].size;
     list.push({
@@ -292,6 +322,11 @@ function rankWeaknesses({ n, cats, catsRaw, catsGames, examples, skills, bpg, op
   }
   for (const o of openingList.filter((x) => x.problem).slice(0, 2)) {
     list.push({ id: 'opening:' + o.color + o.family, title: `Ouverture : ${frOpening(o.family)} (${o.color === 'w' ? 'Blancs' : 'Noirs'})`, priority: 0.6 + (o.n / 20), detail: `${o.n} parties, ${o.scorePct ?? '?'} % de points${o.evalAt20 !== null ? `, éval. moyenne au coup 10 : ${(o.evalAt20 > 0 ? '+' : '') + (o.evalAt20 / 100).toFixed(1).replace('.', ',')}` : ''}`, tip: 'Revois les lignes de cette ouverture dans « Cours → Ouvertures » et analyse tes défaites dans cette ouverture.', lessons: ['principes'], theme: 'opening', opening: o, examples: [] });
+  }
+  // gaffes jouées trop vite (parties avec pendule) : seulement si c'est fréquent ; même poids que les autres catégories
+  if (fast?.n >= FAST_MIN && fast.n / fast.of >= FAST_RATE) {
+    const def = CATEGORIES['trop-vite'];
+    list.push({ id: 'trop-vite', title: 'Tu joues trop vite dans les moments critiques', priority: (cats['trop-vite'] || fast.n) / n, detail: `${fast.n} de tes ${fast.of} gaffes et erreurs (${fast.pct}\u00a0%) jouées en quelques secondes, alors qu’il te restait plus de la moitié de ton temps`, tip: def.tip, lessons: def.lessons, theme: def.theme, examples: (examples['trop-vite'] || []).slice(-5) });
   }
   if (bpg !== null && bpg > 1.5 && !list.some((x) => x.id === 'piece-en-prise')) {
     list.push({ id: 'blunders', title: 'Trop de gaffes', priority: bpg / 2, detail: `${Math.round(bpg * 10) / 10} gaffe(s) par partie`, tip: CATEGORIES['piece-en-prise'].tip, lessons: ['routine'], theme: 'hangingPiece', examples: [] });

@@ -107,6 +107,21 @@ export const today = () => dayOf();
 /** Vrai si la date (ISO ou millisecondes) tombe aujourd'hui, à l'heure du téléphone. */
 export const isToday = (t) => !!t && dayOf(t) === today();
 
+/** Nombre maximal de parties gardées sur le téléphone. */
+export const MAX_GAMES = 300;
+/**
+ * Garde au plus MAX_GAMES parties (d = l'état en cours de modification, trié par date) : on enlève d'abord les plus
+ * anciennes pas encore analysées, puis s'il le faut les plus anciennes analysées ; jamais celle d'identifiant keepId.
+ */
+export function trimGames(d, keepId = null) {
+  let drop = d.games.length - MAX_GAMES;
+  if (drop <= 0) return;
+  for (const analysed of [false, true]) {
+    d.games = d.games.filter((g) => !(drop > 0 && !!g.review === analysed && g.id !== keepId && drop--));
+    if (drop <= 0) return;
+  }
+}
+
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 /** Marque l'activité du jour (série de jours consécutifs). */

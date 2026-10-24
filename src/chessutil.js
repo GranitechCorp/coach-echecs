@@ -96,13 +96,13 @@ export function winPct(cp) {
   return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * c)) - 1);
 }
 
-/** Texte d'évaluation : « +1.4 », « M3 », « -M2 » (point de vue des Blancs). */
+/** Texte d'évaluation : « +1,4 », « M3 », « -M2 » (point de vue des Blancs, décimale à la française). */
 export function evalText(line) {
   if (!line) return '…';
   const s = line.white;
   if (s.mate !== undefined) return s.mate > 0 ? `M${s.mate}` : `-M${-s.mate}`;
   const v = s.cp / 100;
-  return (v > 0 ? '+' : '') + v.toFixed(1);
+  return (v > 0 ? '+' : '') + v.toFixed(1).replace('.', ',');
 }
 
 /** Phrase simple sur l'évaluation, du point de vue d'une couleur. */

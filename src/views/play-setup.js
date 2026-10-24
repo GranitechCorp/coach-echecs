@@ -42,7 +42,7 @@ export function render(root, presetElo) {
       </div>
     </section>
     <section class="card">
-      <label class="switch"><input type="checkbox" id="live" ${s.settings.liveCoach ? 'checked' : ''}/> Coach en direct : prévenir quand je fais une erreur (je peux reprendre mon coup)</label>
+      <label class="switch"><input type="checkbox" id="live" ${s.settings.liveCoach ? 'checked' : ''}/> Coach en direct : m’alerter quand je fais une erreur, sans me donner la solution, pour que je cherche mieux (je peux reprendre mon coup)</label>
       <label class="switch"><input type="checkbox" id="evalbar" ${s.settings.showEvalDefault ? 'checked' : ''}/> Afficher la barre d’évaluation</label>
     </section>
     <button class="btn primary block" id="go">Commencer la partie</button>`;

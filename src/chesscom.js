@@ -1,9 +1,8 @@
 // Synchronisation avec l'API publique de chess.com (pas besoin de mot de passe : les parties sont publiques).
-import { db, update, uid } from './storage.js';
+import { db, update, uid, trimGames } from './storage.js';
 
 const API = 'https://api.chess.com/pub/player/';
 const FIRST_SYNC_MONTHS = 6;
-const MAX_GAMES = 300;
 
 const LOSS = new Set(['checkmated', 'resigned', 'timeout', 'abandoned', 'lose', 'bughousepartnerlose']);
 const RESULT_FR = { win: 'Victoire', checkmated: 'Défaite (mat)', resigned: 'Défaite (abandon)', timeout: 'Défaite (temps)', abandoned: 'Défaite (abandon)', agreed: 'Nulle (accord)', repetition: 'Nulle (répétition)', stalemate: 'Nulle (pat)', insufficient: 'Nulle (matériel)', '50move': 'Nulle (50 coups)', timevsinsufficient: 'Nulle (temps)' };
@@ -114,12 +113,7 @@ export async function syncChesscom(user = db().profile.chesscomUser, onProgress)
   update((d) => {
     d.games.push(...fresh.sort((a, b) => a.date.localeCompare(b.date)));
     d.games.sort((a, b) => a.date.localeCompare(b.date));
-    if (d.games.length > MAX_GAMES) {
-      // on garde en priorité les parties déjà analysées
-      const drop = d.games.length - MAX_GAMES;
-      let removed = 0;
-      d.games = d.games.filter((g) => (removed < drop && !g.review ? (removed++, false) : true));
-    }
+    trimGames(d); // on garde en priorité les parties déjà analysées
     d.sync = { at: Date.now(), lastArchive: todo.at(-1), user };
     if (ratings) {
       d.ccRatings = ratings;
@@ -224,7 +218,7 @@ export function importPgnBatch(text, { user = db().profile.chesscomUser, fallbac
     update((d) => {
       d.games.push(...fresh);
       d.games.sort((a, b) => a.date.localeCompare(b.date));
-      if (d.games.length > MAX_GAMES) d.games.splice(0, d.games.length - MAX_GAMES);
+      trimGames(d);
     });
   }
   return { added: fresh.length, skipped, total: games.length, ids: fresh.map((g) => g.id) };

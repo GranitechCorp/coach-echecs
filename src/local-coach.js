@@ -85,7 +85,7 @@ export function profileReportLocal(ins, recs) {
     const cc = s.ccRatings?.rapid?.rating || s.ccRatings?.blitz?.rating || s.profile.currentElo || null;
     const diff = cc ? ins.estElo - cc : 0;
     const cmp = !cc ? '' : diff >= 150 ? ` : c’est au-dessus de ton Elo chess.com (${cc}), tes résultats devraient suivre si tu restes régulier` : diff <= -150 ? ` : c’est sous ton Elo chess.com (${cc}), signe que quelques grosses gaffes plombent tes parties` : ` : c’est cohérent avec ton Elo chess.com (${cc})`;
-    out.push(`**Niveau de jeu estimé : ≈ ${ins.estElo}** (${ins.estEloN > 1 ? `médiane de tes ${ins.estEloN} dernières parties analysées` : 'd’après ta seule partie analysée'}, indicatif)${cmp}.`);
+    out.push(`**Niveau de jeu estimé : ≈ ${ins.estElo}** (${ins.estEloN > 1 ? `médiane de tes ${ins.estEloN} dernières parties analysées` : 'd’après une seule partie analysée assez longue'}, indicatif)${cmp}.`);
     const goal = s.profile.goalElo;
     if (goal && ins.estAcpl !== null && ins.estAcpl !== undefined && ins.estElo < goal) out.push(`Pour jouer au niveau ${goal}, il faut perdre en moyenne environ ${acplForElo(goal)} centipions par coup ; tu en es à ${ins.estAcpl}. Chaque gaffe évitée fait baisser ce chiffre très vite.`);
   }
