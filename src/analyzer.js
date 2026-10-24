@@ -567,9 +567,8 @@ export function deriveGame(game, parsed, review) {
   out.brilliants = out.brilliantIdx.length;
   out.greats = out.greatIdx.length;
   out.misses = out.missIdx.length;
-  // partie trop courte : pas d'Elo (ni ici, ni dans la moyenne des progrès)
+  // partie trop courte : pas de performance (ni ici, ni dans la forme des progrès)
   out.short = out.moves < MIN_ELO_MOVES;
-  out.estElo = out.short ? null : (review.elo || computeGameElo(moves, ev))[me] ?? null;
   return out;
 }
 

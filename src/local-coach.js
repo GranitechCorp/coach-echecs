@@ -1,7 +1,7 @@
 // Le coach « maison » : bilans et conseils rédigés sans IA, à partir des analyses Stockfish
 // et des règles de l'appli. Rien ne sort du téléphone.
 import { db } from './storage.js';
-import { CATEGORIES, SKILLS, lessonTitle } from './insights.js';
+import { CATEGORIES, SKILLS, lessonTitle, gamePerformance } from './insights.js';
 import { SLOTS } from './advisor.js';
 import { THEME_LABELS } from './data/themes.js';
 import { matchOpening } from './analyzer.js';
@@ -39,12 +39,8 @@ export function gameSummaryLocal(game, review, sans) {
   const acc = Math.round(review.accuracy[me]);
   const verdict = acc >= 90 ? 'une partie très propre' : acc >= 80 ? 'une bonne partie' : acc >= 70 ? 'une partie correcte avec quelques trous' : 'une partie où des erreurs ont coûté cher';
   out.push(`**Précision ${acc} %** : ${verdict}.`);
-  const est = review.elo?.[me];
-  if (est) {
-    const acpl = review.acpl?.[me];
-    const rating = game.myRating ? ` Ton classement au moment de la partie : ${game.myRating}.` : '';
-    out.push(`**Elo estimé sur cette partie : ≈ ${est}** (indicatif${acpl !== null && acpl !== undefined ? `, d’après ta perte moyenne de ${acpl} centipions par coup` : ''}).${rating}`);
-  }
+  const perf = gamePerformance(game, db());
+  if (perf) out.push(`**Performance sur cette partie : ≈ ${perf.me.perf}** (ton classement ${perf.me.rating}, ajusté selon ta précision : ${acc} % contre ${perf.me.usual} % d’habitude).`);
   // coups brillants, coups forts, occasions manquées (étiquettes du bilan)
   const idx = (t, key) => d?.[key] || (review.tags || []).map((x, i) => (x === t && (i % 2 === 0) === (me === 'w') ? i : -1)).filter((i) => i >= 0);
   const label = (i) => `${moveLabel(i)}${fig(sans[i] || '')}`;
@@ -80,14 +76,11 @@ export function gameSummaryLocal(game, review, sans) {
 /** Bilan complet du joueur, rédigé sans IA. */
 export function profileReportLocal(ins, recs) {
   const out = [];
-  if (ins.estElo) {
+  if (ins.accLast) {
     const s = db();
     const cc = s.ccRatings?.rapid?.rating || s.ccRatings?.blitz?.rating || s.profile.currentElo || null;
-    const diff = cc ? ins.estElo - cc : 0;
-    const cmp = !cc ? '' : diff >= 150 ? ` : c’est au-dessus de ton Elo chess.com (${cc}), tes résultats devraient suivre si tu restes régulier` : diff <= -150 ? ` : c’est sous ton Elo chess.com (${cc}), signe que quelques grosses gaffes plombent tes parties` : ` : c’est cohérent avec ton Elo chess.com (${cc})`;
-    out.push(`**Niveau de jeu estimé : ≈ ${ins.estElo}** (${ins.estEloN > 1 ? `médiane de tes ${ins.estEloN} dernières parties analysées` : 'd’après une seule partie analysée assez longue'}, indicatif)${cmp}.`);
-    const goal = s.profile.goalElo;
-    if (goal && ins.estAcpl !== null && ins.estAcpl !== undefined && ins.estElo < goal) out.push(`Pour jouer au niveau ${goal}, il faut perdre en moyenne environ ${acplForElo(goal)} centipions par coup ; tu en es à ${ins.estAcpl}. Chaque gaffe évitée fait baisser ce chiffre très vite.`);
+    const trend = ins.accPrev === null ? '' : ins.accLast - ins.accPrev >= 2 ? `, en hausse de ${ins.accLast - ins.accPrev} points : tu progresses` : ins.accPrev - ins.accLast >= 2 ? `, en baisse de ${ins.accPrev - ins.accLast} points : ce sont souvent quelques grosses gaffes` : ', stable';
+    out.push(`**Ta forme : ${ins.accLast} % de précision** ${ins.accLastN > 1 ? `sur tes ${ins.accLastN} dernières parties` : 'sur ta partie analysée'}${trend}.${cc ? ` Ton vrai niveau reste ton classement chess.com (${cc}) : quand ta précision monte durablement, il suit.` : ''}`);
   }
   if (ins.brilliants || ins.greats || ins.misses) {
     const parts = [];
@@ -126,5 +119,3 @@ export function profileReportLocal(ins, recs) {
   return out;
 }
 
-/** Perte moyenne par coup (centipions) qui correspond à un Elo donné (inverse de la formule d'Elo estimé). */
-export const acplForElo = (elo) => Math.round(Math.log(3100 / elo) / 0.0116);

@@ -12,7 +12,7 @@ import { THEME_LABELS } from '../data/themes.js';
 import { frOpening } from '../data/opening-names.js';
 import { OPENING_LINES } from '../data/openings.js';
 import { askCoach, coachReady, inClaudeViewer } from '../coach-ai.js';
-import { aiEnabled, profileReportLocal, acplForElo } from '../local-coach.js';
+import { aiEnabled, profileReportLocal } from '../local-coach.js';
 import { TAGS, tagCount } from '../explain.js';
 import { promptProfileReport } from '../prompts.js';
 
@@ -195,12 +195,12 @@ export function render(root) {
     attachLineTooltip(root.querySelector('#blunder-chart'), bp);
     const estBox = root.querySelector('#est-chart');
     if (estBox) {
-      const ep = ins.estEloSeries.map((p) => {
+      const ep = ins.accSeries.map((p) => {
         const day = new Date(p.date);
         const known = !!p.date && !Number.isNaN(day.getTime()); // partie sans date : pas de « Invalid Date »
-        return { y: p.elo, x: known ? day.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '', label: `${known ? day.toLocaleDateString('fr-FR') + ' : ' : ''}≈ ${p.elo}` };
+        return { y: p.acc, x: known ? day.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '', label: `${known ? day.toLocaleDateString('fr-FR') + ' : ' : ''}${Math.round(p.acc)} %` };
       });
-      estBox.innerHTML = lineChart(ep, { yLabel: 'Elo estimé par partie', fmt: (v) => String(Math.round(v / 25) * 25) });
+      estBox.innerHTML = lineChart(ep, { yLabel: 'Précision par partie', fmt: (v) => `${Math.round(v)} %` });
       attachLineTooltip(estBox, ep);
     }
 
@@ -309,45 +309,34 @@ function chesscomElo(s) {
   return null;
 }
 
-/** Carte « Niveau de jeu estimé » : médiane des dernières parties, comparaison et courbe. */
+/** Carte « Ta forme » : vrai classement, précision des 10 dernières parties analysées et tendance, courbe, coups brillants. */
 function levelCard(ins, s) {
-  if (!ins.estElo) {
-    // seulement des parties trop courtes : on dit pourquoi il n'y a pas encore d'estimation
-    if (!ins.estEloShort) return '';
+  if (!ins.accLast) {
+    // seulement des parties trop courtes : on dit pourquoi il n'y a rien à montrer
+    if (!ins.shortGames) return '';
     return `<section class="card">
-    <h2>Niveau de jeu estimé</h2>
-    <p class="small muted">Pas encore d’estimation : ${ins.estEloShort > 1 ? `tes ${ins.estEloShort} parties analysées sont trop courtes` : 'ta partie analysée est trop courte'} (moins de ${MIN_ELO_MOVES} coups joués) pour estimer ton niveau. Analyse une partie plus longue.</p>
+    <h2>Ta forme</h2>
+    <p class="small muted">${ins.shortGames > 1 ? `Tes ${ins.shortGames} parties analysées sont trop courtes` : 'Ta partie analysée est trop courte'} (moins de ${MIN_ELO_MOVES} coups joués) pour mesurer ta précision. Analyse une partie plus longue.</p>
   </section>`;
   }
   const cc = chesscomElo(s);
-  const n = ins.estEloN;
-  const diff = cc ? ins.estElo - cc.value : 0;
-  let cmp = '';
-  if (cc) {
-    if (diff >= 150) cmp = `Tu joues environ ${Math.round(diff / 25) * 25} points au-dessus de ton classement : si tu restes régulier, ton Elo devrait monter.`;
-    else if (diff <= -150) cmp = `C’est sous ton classement : en général, ce sont quelques grosses gaffes qui font chuter la moyenne. Les éviter, c’est ton plus gros levier.`;
-    else cmp = 'C’est cohérent avec ton classement chess.com.';
-  }
-  const goal = s.profile.goalElo;
-  const target = goal && ins.estAcpl !== null && ins.estElo < goal
-    ? `<p class="small">🎯 Pour jouer à ${goal}, il faut perdre en moyenne environ <b>${acplForElo(goal)} centipions</b> par coup ; tu en es à <b>${ins.estAcpl}</b>.</p>`
-    : '';
+  const n = ins.accLastN;
+  const trend = ins.accPrev === null ? null : ins.accLast - ins.accPrev;
+  const trendTxt = trend === null ? '' : trend >= 2 ? `en hausse de ${trend} points par rapport aux 10 parties d’avant : tu progresses !` : trend <= -2 ? `en baisse de ${-trend} points par rapport aux 10 parties d’avant : regarde surtout tes gaffes.` : 'stable par rapport aux 10 parties d’avant.';
   const tags = ['brilliant', 'great', 'miss'].filter((t) => ins[{ brilliant: 'brilliants', great: 'greats', miss: 'misses' }[t]]);
   const lastB = ins.brilliantMoves.at(-1);
   return `<section class="card">
-    <h2>Niveau de jeu estimé</h2>
+    <h2>Ta forme</h2>
     <div class="ri-level-row">
-      <div><div class="big">≈ ${ins.estElo}</div><div class="small muted">${n > 1 ? `médiane de tes ${n} dernières parties analysées` : 'd’après une seule partie analysée'}</div></div>
+      <div><div class="big">${ins.accLast} %</div><div class="small muted">précision moyenne ${n > 1 ? `de tes ${n} dernières parties` : 'de ta seule partie analysée'}</div></div>
       ${cc ? `<div><div class="big muted">${cc.value}</div><div class="small muted">${esc(cc.label)}</div></div>` : ''}
     </div>
-    ${cmp ? `<p class="small">${cmp}</p>` : ''}
-    ${n < 5 ? '<p class="small muted">Encore peu de parties : l’estimation deviendra fiable à partir de 5 à 10 parties analysées.</p>' : ''}
-    ${ins.estEloShort ? `<p class="small muted">${ins.estEloShort > 1 ? `${ins.estEloShort} parties trop courtes (moins de ${MIN_ELO_MOVES} coups joués) ne comptent pas` : `Une partie trop courte (moins de ${MIN_ELO_MOVES} coups joués) ne compte pas`} : on ne peut pas y estimer ton niveau.</p>` : ''}
-    ${target}
-    ${ins.estEloSeries.length >= 2 ? '<p class="small muted">Elo estimé à chaque partie</p><div id="est-chart"></div>' : ''}
+    ${trendTxt ? `<p class="small">${trendTxt}</p>` : ''}
+    ${ins.shortGames ? `<p class="small muted">${ins.shortGames > 1 ? `${ins.shortGames} parties trop courtes (moins de ${MIN_ELO_MOVES} coups joués) ne comptent pas` : `Une partie trop courte (moins de ${MIN_ELO_MOVES} coups joués) ne compte pas`}.</p>` : ''}
+    ${ins.accSeries.length >= 2 ? '<p class="small muted">Ta précision à chaque partie</p><div id="est-chart"></div>' : ''}
     ${tags.length ? `<div class="ri-tags-line">${tags.map((t) => `<span class="badge ri-tag ri-${TAGS[t].css}"><b>${TAGS[t].sym}</b> ${tagCount(t, ins[{ brilliant: 'brilliants', great: 'greats', miss: 'misses' }[t]])}</span>`).join('')}</div>` : ''}
     ${lastB ? `<a class="btn small ri-btn-brilliant" href="#/review/${encodeURIComponent(lastB.gameId)}/${lastB.i}">💎 Revoir mon dernier coup brillant</a>` : ''}
-    <p class="muted small">Estimation indicative, calculée comme l’« Elo de la partie » du bilan chess.com : plus tu perds peu de terrain à chaque coup (mesuré par Stockfish), plus elle est haute. Une partie isolée varie beaucoup : c’est la tendance qui compte.</p>
+    <p class="muted small">Ton vrai niveau, c’est ton classement chess.com. La précision (mesurée par Stockfish) dit si tu joues mieux ou moins bien que d’habitude : quand elle monte de façon durable, ton classement suit. Dans chaque bilan, la « performance » de la partie part de ton classement et l’ajuste selon ta précision.</p>
   </section>`;
 }
 

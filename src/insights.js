@@ -193,19 +193,19 @@ const median = (a) => {
 const userMoves = (g, d) => (typeof d.moves === 'number' ? d.moves : Math.floor(((g.review?.n || 0) + (g.userColor === 'w' ? 1 : 0)) / 2));
 
 /**
- * Elo estimé : médiane des 10 dernières parties analysées (indicatif), courbe par partie,
+ * Forme du joueur : précision moyenne de ses 10 dernières parties analysées comparée aux 10 précédentes, courbe par partie,
  * et totaux de coups brillants / forts / occasions manquées.
- * Les parties de moins de MIN_ELO_MOVES coups joués n'ont pas d'Elo : elles ne comptent ni dans la médiane ni dans la courbe.
+ * (Plus d'« Elo estimé » tiré de la seule perte moyenne par coup : sur une partie, il donnait n'importe quoi,
+ * jusqu'à 2000 et plus pour un joueur de 900. Voir gamePerformance pour une estimation ancrée sur le vrai classement.)
+ * Les parties de moins de MIN_ELO_MOVES coups joués ne comptent pas : la précision y dépend surtout de la théorie.
  */
 function computeLevel(D) {
   const dated = [...D].sort((a, b) => String(a.g.date || '').localeCompare(String(b.g.date || '')));
-  const long = dated.filter(({ g, d }) => userMoves(g, d) >= MIN_ELO_MOVES);
-  const withElo = long
-    .map(({ g, d }) => ({ g, d, elo: d.estElo ?? g.review?.elo?.[g.userColor] ?? null, acpl: g.review?.acpl?.[g.userColor] ?? null }))
-    .filter((x) => x.elo);
-  const last = withElo.slice(-10);
-  const med = median(last.map((x) => x.elo));
-  const acpls = last.map((x) => x.acpl).filter((v) => v !== null && v !== undefined);
+  const long = dated.filter(({ g, d }) => userMoves(g, d) >= MIN_ELO_MOVES && Number.isFinite(g.review?.accuracy?.[g.userColor]));
+  const accSeries = long.map(({ g }) => ({ date: g.date, acc: g.review.accuracy[g.userColor], gameId: g.id }));
+  const mean = (a) => (a.length ? a.reduce((x, y) => x + y.acc, 0) / a.length : null);
+  const last = accSeries.slice(-10);
+  const prev = accSeries.slice(-20, -10);
   const brilliantMoves = [];
   let brilliants = 0;
   let greats = 0;
@@ -217,15 +217,56 @@ function computeLevel(D) {
     for (const i of d.brilliantIdx || []) brilliantMoves.push({ gameId: g.id, i, date: g.date });
   }
   return {
-    estElo: med === null ? null : Math.round(med / 25) * 25,
-    estEloN: last.length,
-    estAcpl: acpls.length ? Math.round(median(acpls)) : null,
-    estEloSeries: withElo.map((x) => ({ date: x.g.date, elo: x.elo, gameId: x.g.id })),
-    estEloShort: dated.length - long.length, // parties trop courtes, laissées de côté
+    accSeries,
+    accLast: last.length ? Math.round(mean(last)) : null,
+    accLastN: last.length,
+    accPrev: prev.length >= 5 ? Math.round(mean(prev)) : null,
+    shortGames: dated.length - long.length, // parties trop courtes, laissées de côté
     brilliants,
     greats,
     misses,
     brilliantMoves,
+  };
+}
+
+/** Précision habituelle d'un joueur de ce classement (ordre de grandeur, précision façon Lichess). */
+const typicalAccuracy = (rating) => Math.max(55, Math.min(90, 58 + 0.012 * rating));
+const PERF_PER_POINT = 30; // points d'Elo par point de précision au-dessus (ou en dessous) de la précision habituelle
+const PERF_MAX = 350; // une partie isolée ne s'écarte jamais de plus de 350 points du classement
+
+/** Précision habituelle du joueur : médiane de ses 20 dernières parties analysées assez longues (null s'il en a moins de 5). */
+export function usualAccuracy(games) {
+  const accs = games
+    .filter((g) => g.review?.derived && Number.isFinite(g.review.accuracy?.[g.userColor]) && userMoves(g, g.review.derived) >= MIN_ELO_MOVES)
+    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
+    .slice(-20)
+    .map((g) => g.review.accuracy[g.userColor]);
+  return accs.length >= 5 ? median(accs) : null;
+}
+
+/**
+ * Performance estimée sur une partie, ANCRÉE sur le vrai classement (celui de la partie sur chess.com, sinon ton Elo) :
+ * classement + 30 points par point de précision au-dessus de ta précision habituelle, à ±350 points au plus.
+ * Une très bonne partie d'un joueur de 900 donne ainsi ≈ 1150, jamais 2200. Pour l'adversaire, on compare sa précision à
+ * ta précision habituelle, corrigée de l'écart de classement. null pour une partie trop courte ou sans classement connu.
+ */
+export function gamePerformance(game, s) {
+  const r = game.review;
+  const me = game.userColor;
+  const them = me === 'w' ? 'b' : 'w';
+  if (!r?.accuracy || !Number.isFinite(r.accuracy[me])) return null;
+  const plies = r.n ?? (r.evals ? r.evals.length - 1 : 0);
+  const myMoves = Math.floor((plies + (me === 'w' ? 1 : 0)) / 2);
+  if (myMoves < MIN_ELO_MOVES) return null;
+  const perf = (rating, acc, usual) => Math.round((rating + Math.max(-PERF_MAX, Math.min(PERF_MAX, PERF_PER_POINT * (acc - usual)))) / 25) * 25;
+  const myRating = game.myRating || s.profile.currentElo || s.profile.startElo || null;
+  if (!myRating) return null;
+  const usual = usualAccuracy(s.games) ?? typicalAccuracy(myRating);
+  const oppRating = game.oppRating || game.botElo || null;
+  return {
+    me: { perf: perf(myRating, r.accuracy[me], usual), rating: myRating, acc: r.accuracy[me], usual: Math.round(usual) },
+    // l'adversaire est comparé à TA précision habituelle, corrigée de l'écart de classement (même pente que typicalAccuracy)
+    them: oppRating && Number.isFinite(r.accuracy[them]) ? { perf: perf(oppRating, r.accuracy[them], usual + 0.012 * (oppRating - myRating)), rating: oppRating } : null,
   };
 }
 

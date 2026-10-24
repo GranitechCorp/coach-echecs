@@ -14,7 +14,7 @@ import { analyzeGame, saveReview, cpOfEval, ensureDerived, ensureReviewExtras, s
 import { startGame } from './game.js';
 import { aiEnabled, gameSummaryLocal } from '../local-coach.js';
 import { frOpening } from '../data/opening-names.js';
-import { FAST_TIP } from '../insights.js';
+import { FAST_TIP, gamePerformance } from '../insights.js';
 
 export const tab = 'profile';
 const DEPTH = 12;
@@ -113,7 +113,6 @@ export function render(root, id, startIdx) {
     const them = me === 'w' ? 'b' : 'w';
     const cpOf = cpOfEval;
     const tags = r.tags || [];
-    const elo = r.elo || {};
     const order = ['best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'blunder'];
     const keyIdx = r.classes.map((c, i) => i).filter((i) => moves[i].color === me && ['mistake', 'blunder'].includes(r.classes[i]));
     const mineTagged = (t) => tags.map((x, i) => (x === t && moves[i].color === me ? i : -1)).filter((i) => i >= 0);
@@ -129,29 +128,28 @@ export function render(root, id, startIdx) {
     const pts = r.evals.map((e, i) => `${xOf(i)},${H - (winPct(cpOf(e)) / 100) * H}`).join(' ');
     const marks = keyIdx.map((i) => `<circle cx="${xOf(i + 1)}" cy="${yOf(i + 1)}" r="4" class="mk-${r.classes[i]}" data-i="${i}"/>`).join('');
     const tagMarks = [...tagIdx.brilliant, ...tagIdx.great].map((i) => `<circle cx="${xOf(i + 1)}" cy="${yOf(i + 1)}" r="4" class="ri-mk-${tags[i]}" data-i="${i}"/>`).join('');
-    const eloLine = (v, mine) => (v ? `<div class="ri-elo${mine ? '' : ' muted'}">Elo estimé ≈ <b>${v}</b></div>` : '');
-    const acplMe = r.acpl?.[me];
-    // partie trop courte : pas d'Elo estimé (quelques coups de théorie suffiraient à afficher 2800)
+    // performance de la partie, ancrée sur ton vrai classement (voir gamePerformance) ; rien sur une partie trop courte
+    const perf = gamePerformance(game, db());
+    const perfLine = (p, mine) => (p ? `<div class="ri-elo${mine ? '' : ' muted'}">Performance ≈ <b>${p.perf}</b></div>` : '');
     const myMoves = moves.filter((m) => m.color === me).length;
     const short = myMoves < MIN_ELO_MOVES;
-    const myElo = short ? null : elo[me];
-    const shortLine = short ? `<div class="ri-elo ri-short muted small">Partie trop courte pour estimer ton niveau</div>` : '';
+    const shortLine = short ? `<div class="ri-elo ri-short muted small">Partie trop courte pour estimer ta performance</div>` : '';
+    const gap = perf ? perf.me.perf - perf.me.rating : 0;
 
     root.innerHTML = `
       <section class="card">
         <div class="row between"><b>${esc(headers.White || '?')} – ${esc(headers.Black || '?')}</b><span class="badge">${esc(headers.Result || game.result || '')}</span></div>
         ${r.opening ? `<p class="muted small">📖 ${esc(frOpening(r.opening))}</p>` : ''}
         <div class="acc-row">
-          <div><div class="big">${Math.round(r.accuracy[me])}%</div><div class="muted small">ta précision</div>${eloLine(myElo, true)}${shortLine}</div>
-          <div><div class="big muted">${Math.round(r.accuracy[them])}%</div><div class="muted small">adversaire</div>${short ? '' : eloLine(elo[them], false)}</div>
+          <div><div class="big">${Math.round(r.accuracy[me])}%</div><div class="muted small">ta précision</div>${perfLine(perf?.me, true)}${shortLine}</div>
+          <div><div class="big muted">${Math.round(r.accuracy[them])}%</div><div class="muted small">adversaire</div>${perfLine(perf?.them, false)}</div>
         </div>
-        ${short ? `<details class="ri-help small"><summary>Pourquoi pas d’Elo estimé ?</summary>
-          <p>Tu n’as joué que ${myMoves} coup${myMoves > 1 ? 's' : ''} dans cette partie. Il en faut au moins ${MIN_ELO_MOVES} pour estimer un niveau : sur une partie aussi courte, quelques coups de théorie ou une seule gaffe donneraient un chiffre sans rapport avec ton jeu.</p>
-          <p class="muted">Elle ne compte pas non plus dans ton Elo estimé moyen de « Mes progrès ».</p>
+        ${short ? `<details class="ri-help small"><summary>Pourquoi pas de performance ?</summary>
+          <p>Tu n’as joué que ${myMoves} coup${myMoves > 1 ? 's' : ''} dans cette partie. Il en faut au moins ${MIN_ELO_MOVES} : sur une partie aussi courte, quelques coups de théorie ou une seule gaffe donneraient un chiffre sans rapport avec ton jeu.</p>
         </details>` : ''}
-        ${myElo ? `<details class="ri-help small"><summary>D’où vient l’Elo estimé ?</summary>
-          <p>C’est une estimation <b>indicative</b>, calculée comme l’« Elo de la partie » du bilan chess.com : Stockfish mesure combien chaque coup fait perdre${acplMe !== null && acplMe !== undefined ? ` (pour toi, en moyenne ${acplMe} centipion${acplMe > 1 ? 's' : ''} par coup, ${acplMe < 5 ? 'presque rien' : `soit ${(acplMe / 100).toFixed(1).replace('.', ',')} pion${acplMe >= 200 ? 's' : ''}`})` : ''}. Moins tu perds, plus l’estimation est haute.</p>
-          <p class="muted">Sur une seule partie, ça varie beaucoup : regarde plutôt la tendance dans « Mes progrès ».</p>
+        ${perf ? `<details class="ri-help small"><summary>D’où vient la performance ?</summary>
+          <p>On part de ton classement au moment de la partie (<b>${perf.me.rating}</b>) et on l’ajuste selon ta précision : <b>${Math.round(perf.me.acc)} %</b> ici, contre <b>${perf.me.usual} %</b> d’habitude. ${gap >= 75 ? 'Tu as joué au-dessus de ton niveau habituel : bravo !' : gap <= -75 ? 'Tu as joué sous ton niveau habituel : regarde où sont parties les erreurs.' : 'C’est une partie à ton niveau habituel.'}</p>
+          <p class="muted">Une seule partie ne peut pas dire ton vrai niveau : l’écart est donc limité à ±350 points. L’ancien « Elo estimé » (calculé comme sur chess.com, sur la seule perte moyenne par coup) donnait parfois 2000 et plus pour une partie gagnée vite : il a été retiré.</p>
         </details>` : ''}
         <div class="counts">${['brilliant', 'great', 'miss']
           .filter((t) => tagIdx[t].length)
