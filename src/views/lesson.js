@@ -41,8 +41,6 @@ const sound = (capture) => {
 };
 
 /** Bouton facultatif sous une étape : link: { href: '#/vision', label: '…' } */
-// (sous l'étape, une marge de 48 px : la barre « Précédent / Suivant » remonte d'environ 42 px sur la fin du contenu
-// tant que body est un conteneur de défilement — voir overflow-x dans styles.css)
 const linkHtml = (link) => (link ? `<a class="btn block" href="${esc(link.href)}">${esc(link.label)}</a>` : '');
 
 export function render(root, id) {
@@ -64,7 +62,6 @@ export function render(root, id) {
       <div class="steps">${lesson.steps.map((_, i) => `<span class="${i < k ? 'done' : i === k ? 'cur' : ''}"></span>`).join('')}</div>
       <div id="step"></div>
       ${linkHtml(st.link)}
-      <div aria-hidden="true" style="height:48px"></div>
       <div class="row between nav-steps">
         <button class="btn ghost" id="prev" ${k === 0 ? 'disabled' : ''}>← Précédent</button>
         <button class="btn primary" id="next">${last ? 'Terminer ✓' : 'Suivant →'}</button>

@@ -56,7 +56,6 @@ b.g-miss { color: var(--g-miss); }
 .guess-entry .coach-title { margin-bottom: 2px; align-items: baseline; }
 .guess-entry p { margin: 2px 0; }
 .guess-moves-card { padding-block: 8px; }
-.guess-moves { max-height: 128px; }
 
 /* ─── Fin de partie ─── */
 .guess-end { text-align: center; padding-block: 14px; }

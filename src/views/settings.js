@@ -17,6 +17,11 @@ export function render(root) {
       <a class="btn block" href="#/vision">👁 S’entraîner à repérer les cases</a>
     </section>
     <section class="card">
+      <h2>Jouer sur l’échiquier</h2>
+      <label class="switch"><input type="checkbox" id="drag" ${s.settings.dragPieces === true ? 'checked' : ''}/> Glisser les pièces avec le doigt</label>
+      <p class="small muted">Désactivé (conseillé) : touche la pièce, puis sa case d’arrivée. La page défile même quand ton doigt passe sur l’échiquier. Activé : tu peux aussi glisser tes pièces, mais un glissement qui part de l’une d’elles ne fait plus défiler la page.</p>
+    </section>
+    <section class="card">
       <h2>Profil</h2>
       <label>Elo de départ<input id="start" type="number" value="${s.profile.startElo}"/></label>
       <label>Objectif<input id="goal" type="number" value="${s.profile.goalElo}"/></label>
@@ -53,6 +58,10 @@ export function render(root) {
   root.querySelector('#ai-on').onchange = (e) => {
     update((d) => (d.settings.aiEnabled = e.target.checked));
     toast(e.target.checked ? 'Coach IA activé' : 'Mode 100 % local');
+  };
+  root.querySelector('#drag').onchange = (e) => {
+    update((d) => (d.settings.dragPieces = e.target.checked));
+    toast(e.target.checked ? 'Tu peux glisser tes pièces ✓' : 'Toucher-toucher : la page défile partout ✓');
   };
   root.querySelector('#sq-names').onchange = (e) => {
     update((d) => (d.settings.squareNames = e.target.checked));

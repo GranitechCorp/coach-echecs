@@ -73,7 +73,7 @@ export function buildProgram(ins) {
   const rushItem = { type: 'rush', count: 2, label: '2 courses contre la montre', why: 'Le coup d’œil tactique' };
   const playItem = { type: 'play', elo: level, label: `1 partie contre l’ordinateur ${level}` };
   const selfItem = { type: 'selfreview', label: 'Auto-analyse de ta dernière partie, puis son bilan Stockfish', why: 'Apprendre à trouver tes erreurs tout seul' };
-  const blunderItem = { type: 'blunder', count: 10, label: 'Anti-gaffe : 10 positions « Sûr ou gaffe ? »', why: 'Vérifier chaque coup avant de le jouer' };
+  const blunderItem = { type: 'blunder', count: 10, label: 'Anti-gaffe : 10 positions (« Sûr ou gaffe ? » ou « Punis la gaffe »)', why: 'Vérifier chaque coup avant de le jouer' };
   const guessItem = { type: 'guess', label: 'Devine le coup : au moins 10 coups d’une partie modèle', why: 'Comprendre les plans des bons joueurs' };
 
   const plan = [

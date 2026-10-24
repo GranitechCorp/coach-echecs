@@ -23,12 +23,16 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; background: var(--bg); color: var(--text); overflow-x: hidden; }
+/* overflow-x: clip (et non hidden) : body ne devient pas un conteneur de défilement, seule la page défile.
+   Avec hidden sur html et body, le défilement au doigt se comportait bizarrement sur certains téléphones. */
+html, body { margin: 0; background: var(--bg); color: var(--text); overflow-x: hidden; overflow-x: clip; }
+/* ce que scrollIntoView amène à l'écran ne finit pas sous la barre d'onglets */
+html { scroll-padding-bottom: calc(var(--tabbar-h, 64px) + 8px); }
 body {
   font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   min-height: 100dvh;
-  padding-bottom: calc(64px + var(--safe-b));
-  overscroll-behavior-y: contain;
+  /* --tabbar-h : hauteur réelle de la barre d'onglets, mesurée par main.js (elle grandit avec la taille du texte) */
+  padding-bottom: calc(var(--tabbar-h, 64px) + 16px);
 }
 a { color: inherit; text-decoration: none; }
 h1, h2, h4 { margin: 0 0 8px; }
@@ -47,7 +51,8 @@ small, .small { font-size: 0.85em; }
 
 /* ─── Barres ─── */
 .topbar {
-  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  /* pas collée en haut : elle cacherait le haut de l'échiquier ou du texte pendant le défilement */
+  position: relative; z-index: 20; margin-top: env(safe-area-inset-top, 0px);
   display: flex; align-items: center; gap: 8px;
   padding-block: 8px;
   padding-left: max(12px, env(safe-area-inset-left, 0px));
@@ -178,7 +183,8 @@ cg-board { border-radius: 4px; }
 .nav .btn { flex: 1; min-width: 0; padding: 8px 4px; }
 .mv, .eline, .coach { font-variant-numeric: tabular-nums; }
 
-.moves { display: flex; flex-wrap: wrap; gap: 2px 4px; align-items: baseline; max-height: 160px; overflow-y: auto; font-size: 0.95rem; }
+/* pas de hauteur maximale ni de défilement interne : un glissement sur la liste fait défiler la page, pas la liste */
+.moves { display: flex; flex-wrap: wrap; gap: 2px 4px; align-items: baseline; font-size: 0.95rem; }
 .mnum { color: var(--muted); margin-left: 4px; }
 .mv { background: none; border: 0; color: var(--text); font: inherit; padding: 2px 4px; border-radius: 4px; cursor: pointer; }
 .mv.cur { background: var(--card2); outline: 1px solid var(--accent); }
@@ -224,11 +230,11 @@ cg-board { border-radius: 4px; }
 .lesson-text { font-size: 1rem; }
 .quiz { display: flex; flex-direction: column; }
 .quiz .btn { justify-content: flex-start; text-align: left; font-weight: 500; }
-.nav-steps { position: sticky; bottom: calc(66px + var(--safe-b)); background: var(--bg); padding: 6px 0; }
+.nav-steps { position: sticky; bottom: var(--tabbar-h, 66px); background: var(--bg); padding: 6px 0; }
 
 /* ─── Divers ─── */
 .toast {
-  position: fixed; left: 50%; bottom: calc(80px + var(--safe-b)); transform: translateX(-50%);
+  position: fixed; left: 50%; bottom: calc(var(--tabbar-h, 64px) + 16px); transform: translateX(-50%);
   background: #000c; color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 50; max-width: 90vw; text-align: center;
 }
 .modal { position: fixed; inset: 0; background: #0009; display: flex; align-items: center; justify-content: center; z-index: 60; padding: 20px; }

@@ -57,6 +57,13 @@ const routes = [
 ];
 
 const app = document.getElementById('app');
+
+// Hauteur réelle de la barre d'onglets (elle grandit si le texte du téléphone est agrandi) : le bas des pages
+// et les barres collées au-dessus d'elle s'y alignent, pour que rien ne reste caché dessous.
+const tabbar = document.getElementById('tabbar');
+const setTabbarH = () => document.documentElement.style.setProperty('--tabbar-h', `${tabbar.offsetHeight}px`);
+new ResizeObserver(setTabbarH).observe(tabbar);
+setTabbarH();
 let cleanup = null;
 
 function route() {

@@ -1,7 +1,8 @@
 // Échiquier tactile (Chessground, celui de Lichess) relié à une partie chess.js.
 import { Chessground } from '@lichess-org/chessground';
 import { toDests, cgColor, parseUci } from './chessutil.js';
-import { db } from './storage.js';
+import { db, update } from './storage.js';
+import { toast } from './ui.js';
 
 /**
  * el : conteneur ; opts : { orientation: 'white'|'black', onMove(uci), interactive(chess) → bool }
@@ -45,7 +46,7 @@ export function createBoard(el, { orientation = 'white', onMove, coordinates = t
   function askPromotion(orig, dest, color) {
     pendingPromo?.remove();
     const box = document.createElement('div');
-    box.className = 'promo';
+    box.className = 'promo cg-wrap'; // cg-wrap : les dessins des pièces de Chessground ne s'appliquent que dedans
     box.innerHTML = ['q', 'r', 'b', 'n']
       .map((t) => `<button data-p="${t}"><piece class="${cgColor(color)} ${{ q: 'queen', r: 'rook', b: 'bishop', n: 'knight' }[t]}"></piece></button>`)
       .join('');
@@ -66,10 +67,12 @@ export function createBoard(el, { orientation = 'white', onMove, coordinates = t
   // On la fait relire juste avant chaque toucher.
   const refreshBounds = () => cg.state.dom.bounds.clear();
   el.addEventListener('mousedown', refreshBounds, { capture: true, passive: true });
-  // Défilement : Chessground bloque le défilement dès que le doigt touche une pièce ou s'en approche, même une pièce
-  // adverse. L'échiquier couvrant la moitié de l'écran, la page ne défilait presque plus. On ne lui laisse le toucher
-  // que s'il sert à jouer : une de tes pièces (à un tiers de case près) ou une pièce déjà sélectionnée.
-  // Ailleurs, le doigt fait défiler la page.
+  // Défilement : Chessground bloque le défilement dès que le doigt touche une pièce ou s'en approche. L'échiquier
+  // couvrant la moitié de l'écran (et tes pièces étant juste sous le pouce), la page ne défilait presque plus.
+  // Par défaut (« toucher-toucher »), Chessground ne reçoit jamais le toucher lui-même : la page défile partout,
+  // et un toucher bref lui arrive comme un clic (touche la pièce, puis sa case d'arrivée).
+  // Réglage « Glisser les pièces » : il garde les touchers qui servent à jouer (une de tes pièces, à un tiers de case
+  // près, ou une pièce déjà sélectionnée) ; ailleurs, le doigt fait défiler la page.
   const playable = (x, y) => {
     const st = cg.state;
     if (st.selected || st.draggable.current) return true;
@@ -82,12 +85,29 @@ export function createBoard(el, { orientation = 'white', onMove, coordinates = t
       return p && (mine === 'both' || p.color === mine);
     });
   };
+  let hintFrom = null; // toucher parti d'une de tes pièces en mode toucher-toucher : on explique une fois comment jouer
   el.addEventListener(
     'touchstart',
     (e) => {
       refreshBounds();
       const t = e.touches[0];
-      if (e.touches.length === 1 && t && !playable(t.clientX, t.clientY)) e.stopPropagation();
+      if (e.touches.length !== 1 || !t) return;
+      const onPiece = playable(t.clientX, t.clientY);
+      const drag = db().settings?.dragPieces === true;
+      hintFrom = !drag && onPiece && !cg.state.selected ? [t.clientX, t.clientY] : null;
+      if (!drag || !onPiece) e.stopPropagation();
+    },
+    { capture: true, passive: true },
+  );
+  el.addEventListener(
+    'touchmove',
+    (e) => {
+      const t = e.touches[0];
+      if (!hintFrom || !t || Math.hypot(t.clientX - hintFrom[0], t.clientY - hintFrom[1]) < 24) return;
+      hintFrom = null;
+      if (db().settings?.dragHintSeen) return;
+      update((d) => (d.settings.dragHintSeen = true));
+      toast('Pour jouer, touche la pièce puis sa case d’arrivée. Tu préfères glisser les pièces ? Active-le dans les Réglages.');
     },
     { capture: true, passive: true },
   );
