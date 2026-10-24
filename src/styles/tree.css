@@ -1,1 +1,100 @@
 /* Mon arbre d’ouvertures (#/tree) */
+
+/* Choix du camp */
+.tree-side { margin: 2px 0 6px; }
+.tree-side a { display: block; }
+.tree-side small { color: var(--muted); font-weight: 400; }
+
+/* Résumé « Là où tu sors du répertoire » : une ligne qu'on déplie */
+.tree-sum { padding: 0 12px; margin: 6px 0; }
+.tree-sum > summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 42px; cursor: pointer; list-style: none; }
+.tree-sum > summary::-webkit-details-marker { display: none; }
+.tree-sum > summary h2 { margin: 0; font-size: 0.98rem; }
+.tree-sum > summary h2::before { content: '▸ '; color: var(--muted); }
+.tree-sum[open] > summary h2::before { content: '▾ '; }
+.tree-sum .ts-count { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+.tree-sum[open] { padding-bottom: 6px; }
+.tree-sum-ok { padding: 9px 12px; }
+.tree-sum-ok p { margin: 0; font-size: 0.88rem; }
+.ts-intro { margin: 0 0 4px; }
+.ts-item { border-top: 1px solid var(--line); padding: 7px 0 2px; }
+.ts-tag { font-weight: 700; }
+.ts-item.me .ts-tag { color: var(--c-mistake); }
+.ts-item.opp .ts-tag { color: var(--blue); }
+.ts-body { margin: 0 0 2px; font-size: 0.9rem; line-height: 1.4; overflow-wrap: anywhere; }
+.ts-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0 8px; }
+.ts-links { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-left: auto; }
+.ts-btn { background: none; border: 0; padding: 7px 0; font: inherit; font-size: 0.86rem; font-weight: 600; color: var(--accent); cursor: pointer; white-space: nowrap; }
+
+/* Sous l'échiquier : nom de l'ouverture, chemin des coups et boutons */
+.tree-name { font-size: 0.88rem; line-height: 1.35; margin: 2px 2px 4px; }
+.tree-name:empty { display: none; }
+.tree-board { margin: 6px auto; }
+.tree-bar { display: flex; align-items: flex-start; gap: 6px; margin: 4px 0; }
+.tree-path { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px; min-height: 34px; background: var(--card); border-radius: 8px; padding: 4px 8px; }
+.tree-path .mv { font-size: 0.95rem; }
+.tree-path > .muted { align-self: center; }
+.tree-btns { display: flex; gap: 4px; flex-shrink: 0; }
+.tree-btns[hidden] { display: none; }
+.tree-btns .btn.small { padding: 6px 8px; }
+.tree-bar + #t-moves { margin-top: 6px; }
+
+/* Coups suivants */
+.tm-head { margin: 0 0 4px; flex-wrap: wrap; }
+.tm-head h2 { margin: 0; font-size: 1.05rem; }
+.tm-note { font-size: 0.9rem; border-radius: 8px; padding: 8px 10px; margin: 6px 0 8px; background: var(--card2); }
+.tm-note.off { border-left: 3px solid var(--c-mistake); }
+.tm-note.prep { border-left: 3px solid var(--blue); }
+.tm-note.rep { border-left: 3px solid var(--accent); }
+.tm-link { display: inline-block; margin-left: 4px; color: var(--accent); white-space: nowrap; }
+.tm-row {
+  display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: none; border: 0; border-top: 1px solid var(--line); padding: 8px 2px;
+}
+.tm-row:active { background: var(--card2); }
+.tm-row.ghost { cursor: default; opacity: 0.75; }
+.tm-top { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.tm-san { font-size: 1.02rem; min-width: 4.2em; font-variant-numeric: tabular-nums; }
+.tm-badge { font-size: 0.75rem; font-weight: 600; border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+.tm-badge.rep { color: var(--accent); background: rgba(129, 182, 76, 0.14); }
+.tm-badge.off { color: var(--c-mistake); background: rgba(255, 154, 60, 0.14); }
+.tm-badge.prep { color: var(--blue); background: rgba(91, 155, 213, 0.14); }
+.tm-n { margin-left: auto; color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+.tm-pct { min-width: 3.2em; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tm-row.off .tm-san { color: var(--c-mistake); }
+.tm-bar { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--bg2); }
+.tm-bar i { display: block; height: 100%; font-style: normal; font-size: 0.68rem; font-weight: 700; line-height: 14px; text-align: center; overflow: hidden; }
+.tm-bar .w { background: var(--accent2); color: #fff; }
+.tm-bar .d { background: #6f6b65; color: #fff; }
+.tm-bar .l { background: #b5473b; color: #fff; }
+.tm-bar .u { background: var(--card2); }
+.tm-legend { margin-top: 8px; }
+.tm-legend .lg { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 2px 0 6px; vertical-align: -1px; }
+.tm-legend .lg:first-child { margin-left: 0; }
+.lg.w { background: var(--accent2); }
+.lg.d { background: #6f6b65; }
+.lg.l { background: #b5473b; }
+
+/* Stockfish */
+.tree-eval { font-size: 0.93rem; overflow-wrap: anywhere; }
+
+/* Parties passées par la position */
+.tg-row small { line-height: 1.5; }
+.tg-loss { color: #e0796d; }
+
+/* ─── Mes parties (#/analysis) : base de parties avec filtres ─── */
+.gdb-head h2 { margin: 0; }
+.gdb-links { display: flex; gap: 12px; align-items: baseline; white-space: nowrap; }
+.gdb #gdb-q { margin: 4px 0 6px; }
+.gdb-help { margin: 2px 0 4px; }
+.gdb-chips { margin: 5px 0; gap: 5px 4px; align-items: center; }
+.gdb-chips .chip { flex-direction: row; gap: 4px; align-items: baseline; padding: 5px 8px; font-size: 0.84rem; min-height: 32px; }
+.gdb-reset { background: none; border: 0; padding: 4px 2px; font: inherit; color: var(--accent); cursor: pointer; }
+.gdb-reset.small { font-size: 0.85em; }
+.gdb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 3px; }
+.gdb-n { color: var(--muted); font-size: 0.75rem; }
+.gdb-more-op { color: var(--accent); }
+.gdb-bar { margin: 10px 0 4px; }
+.gdb-bar select { width: auto; max-width: 55%; padding: 6px 8px; }
+.gdb .list-item small { line-height: 1.5; }
+.gdb-loss { color: #e0796d; }

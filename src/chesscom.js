@@ -218,7 +218,7 @@ export function importPgnBatch(text, { user = db().profile.chesscomUser, fallbac
     update((d) => {
       d.games.push(...fresh);
       d.games.sort((a, b) => a.date.localeCompare(b.date));
-      trimGames(d);
+      trimGames(d, fresh.map((g) => g.id)); // jamais les parties qu'on vient d'importer
     });
   }
   return { added: fresh.length, skipped, total: games.length, ids: fresh.map((g) => g.id) };

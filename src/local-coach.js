@@ -18,7 +18,7 @@ const moveWords = (i) => `${Math.floor(i / 2) + 1 === 1 ? '1er' : `${Math.floor(
 
 /** Ce que dit le répertoire sur l'ouverture de la partie (sortie de ligne, coup prévu). */
 export function openingNote(sans, userColor) {
-  const m = matchOpening(sans);
+  const m = matchOpening(sans, userColor);
   if (!m.line || m.len < 2) return null;
   const line = parseLine(m.line.moves);
   if (m.len >= line.length) return `Tu as joué toute la ligne « ${m.line.name} » de ton répertoire : bravo.`;

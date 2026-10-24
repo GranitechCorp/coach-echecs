@@ -5,7 +5,7 @@ import { update, uid, dayOf, today } from './storage.js';
 import { getAnalysisEngine } from './engine.js';
 import { parsePgn, uciOf, cpWhite, winPct, safeChess, playUci, VALUE } from './chessutil.js';
 import { classifyMove, describeMove, isHanging } from './explain.js';
-import { OPENING_LINES, parseLine } from './data/openings.js';
+import { OPENING_LINES, parseLine, groupOf } from './data/openings.js';
 
 // v3 : analyse en multipv 2 (score de la 2e ligne), étiquettes brillant / fort / occasion manquée, Elo estimé
 export const REVIEW_VERSION = 3;
@@ -21,10 +21,11 @@ export const DERIVED_VERSION = 3;
 /** En dessous de ce nombre de coups joués, une partie est trop courte pour estimer un niveau. */
 export const MIN_ELO_MOVES = 15;
 
-/** Trouve la ligne de répertoire qui colle le plus longtemps à la partie. */
-export function matchOpening(sans) {
+/** Trouve la ligne de répertoire qui colle le plus longtemps à la partie (parmi celles de ton camp, s'il est donné). */
+export function matchOpening(sans, color = null) {
   let best = { len: 0, line: null };
   for (const line of OPENING_LINES) {
+    if (color && groupOf(line)?.side !== color) continue;
     const moves = parseLine(line.moves).map((m) => m.san);
     let k = 0;
     while (k < moves.length && k < sans.length && moves[k] === sans[k]) k++;
@@ -352,7 +353,7 @@ export async function analyzeGame(game, { depth = 12, onProgress, isAlive = () =
   }
   fixMateHorizon(moves, evals);
   const sans = moves.map((m) => m.san);
-  const match = matchOpening(sans);
+  const match = matchOpening(sans, game.userColor);
   const classes = [];
   const acc = { w: [], b: [] };
   const counts = { w: {}, b: {} };

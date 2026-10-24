@@ -111,13 +111,15 @@ export const isToday = (t) => !!t && dayOf(t) === today();
 export const MAX_GAMES = 300;
 /**
  * Garde au plus MAX_GAMES parties (d = l'état en cours de modification, trié par date) : on enlève d'abord les plus
- * anciennes pas encore analysées, puis s'il le faut les plus anciennes analysées ; jamais celle d'identifiant keepId.
+ * anciennes pas encore analysées, puis s'il le faut les plus anciennes analysées ; jamais celles de keep
+ * (un identifiant ou une liste : les parties qu'on vient d'ajouter).
  */
-export function trimGames(d, keepId = null) {
+export function trimGames(d, keep = null) {
   let drop = d.games.length - MAX_GAMES;
   if (drop <= 0) return;
+  const kept = new Set([keep].flat().filter(Boolean));
   for (const analysed of [false, true]) {
-    d.games = d.games.filter((g) => !(drop > 0 && !!g.review === analysed && g.id !== keepId && drop--));
+    d.games = d.games.filter((g) => !(drop > 0 && !!g.review === analysed && !kept.has(g.id) && drop--));
     if (drop <= 0) return;
   }
 }
